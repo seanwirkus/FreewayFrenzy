@@ -1,0 +1,64 @@
+Command: ninja flash
+[1/5] cd /Users/sean/Documents/FreewayFrenzy/build/esp-idf/esptool_py && /Users/sean/.espressif/python_env/idf5.5_py3.14_env/bin/python /Users/sean/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/sean/Documents/FreewayFrenzy/build/partition_table/partition-table.bin /Users/sean/Documents/FreewayFrenzy/build/FreewayFrenzy.bin
+FreewayFrenzy.bin binary size 0x8e2c0 bytes. Smallest app partition is 0x800000 bytes. 0x771d40 bytes (93%) free.
+[2/5] Performing build step for 'bootloader'
+[1/1] cd /Users/sean/Documents/FreewayFrenzy/build/bootloader/esp-idf/esptool_py && /Users/sean/.espressif/python_env/idf5.5_py3.14_env/bin/python /Users/sean/esp/v5.5.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /Users/sean/Documents/FreewayFrenzy/build/bootloader/bootloader.bin
+Bootloader binary size 0x57e0 bytes. 0x2820 bytes (31%) free.
+[3/5] No install step for 'bootloader'
+[4/5] Completed 'bootloader'
+[4/5] cd /Users/sean/esp/v5.5.1/esp-idf/components/esptool_py && /opt/homebrew/bin/cmake -D IDF_PATH=/Users/sean/esp/v5.5.1/esp-idf -D "SERIAL_TOOL=/Users/sean/.espressif/python_env/idf5.5_py3.14_env/bin/python;;/Users/sean/esp/v5.5.1/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32s3" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/Users/sean/Documents/FreewayFrenzy/build -P /Users/sean/esp/v5.5.1/esp-idf/components/esptool_py/run_serial_tool.cmake
+esptool.py --chip esp32s3 -p /dev/cu.usbmodem101 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 16MB 0x0 bootloader/bootloader.bin 0x10000 FreewayFrenzy.bin 0x8000 partition_table/partition-table.bin
+esptool.py v4.12.dev1
+Serial port /dev/cu.usbmodem101
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: 10:51:db:74:f4:b8
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00005fff...
+Flash will be erased from 0x00010000 to 0x0009efff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+SHA digest in image updated
+Compressed 22496 bytes to 14273...
+Writing at 0x00000000... (100 %)
+Wrote 22496 bytes (14273 compressed) at 0x00000000 in 0.2 seconds (effective 755.8 kbit/s)...
+Hash of data verified.
+Compressed 582336 bytes to 356321...
+Writing at 0x00010000... (4 %)
+Writing at 0x0001d6d5... (9 %)
+Writing at 0x00025748... (13 %)
+Writing at 0x000306f4... (18 %)
+Writing at 0x00036363... (22 %)
+Writing at 0x0003be75... (27 %)
+Writing at 0x000412e8... (31 %)
+Writing at 0x0004681c... (36 %)
+Writing at 0x0004b730... (40 %)
+Writing at 0x00050c47... (45 %)
+Writing at 0x000571b6... (50 %)
+Writing at 0x0005bfe0... (54 %)
+Writing at 0x00061347... (59 %)
+Writing at 0x00066704... (63 %)
+Writing at 0x0006c1ca... (68 %)
+Writing at 0x00071b10... (72 %)
+Writing at 0x0007b9a5... (77 %)
+Writing at 0x00082129... (81 %)
+Writing at 0x00088e7c... (86 %)
+Writing at 0x0008e09a... (90 %)
+Writing at 0x00093b62... (95 %)
+Writing at 0x00099c9b... (100 %)
+Wrote 582336 bytes (356321 compressed) at 0x00010000 in 3.3 seconds (effective 1408.7 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 105...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (105 compressed) at 0x00008000 in 0.0 seconds (effective 534.4 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

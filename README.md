@@ -1,6 +1,6 @@
 # Freeway Frenzy – High-Speed Driving Game
 
-![Freeway Frenzy](coverimage.png)
+![Freeway Frenzy](https://raw.githubusercontent.com/seanwirkus/FreewayFrenzy/main/coverimage.png)
 
 A high-performance driving game for the **ESP32-S3-Touch-LCD-7B** (1024×600 display). Steer your car through traffic using an external ESP32-C3 based joystick controller over UART!
 

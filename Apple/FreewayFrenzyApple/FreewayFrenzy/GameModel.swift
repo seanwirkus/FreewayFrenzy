@@ -12,6 +12,21 @@ struct CarStyle: Equatable {
     let name: String
     let bodyHex: UInt32
     let roofHex: UInt32
+
+    static let catalog = [
+        CarStyle(name: "Crimson", bodyHex: 0xD90429, roofHex: 0xA3031F),
+        CarStyle(name: "Ocean Blue", bodyHex: 0x1E90FF, roofHex: 0x1565C0),
+        CarStyle(name: "Lime", bodyHex: 0x32CD32, roofHex: 0x228B22),
+        CarStyle(name: "Gold", bodyHex: 0xFFD700, roofHex: 0xDAA520),
+        CarStyle(name: "Purple", bodyHex: 0x9B59B6, roofHex: 0x7D3C98),
+        CarStyle(name: "Hot Pink", bodyHex: 0xFF69B4, roofHex: 0xDB2777),
+        CarStyle(name: "Orange", bodyHex: 0xFF8C00, roofHex: 0xCC7000),
+        CarStyle(name: "Silver", bodyHex: 0xC0C0C0, roofHex: 0x909090),
+        CarStyle(name: "Mint", bodyHex: 0x2EE6A6, roofHex: 0x168C68),
+        CarStyle(name: "Sky", bodyHex: 0x73D2FF, roofHex: 0x2E86B8),
+        CarStyle(name: "Grape", bodyHex: 0x6C5CE7, roofHex: 0x3D348B),
+        CarStyle(name: "Taxi", bodyHex: 0xFFC300, roofHex: 0x2B2B2B)
+    ]
 }
 
 struct Obstacle {
@@ -57,20 +72,7 @@ final class GameModel {
     let crashDuration: TimeInterval = 1.2
     let spawnY: CGFloat = -96
 
-    let carStyles = [
-        CarStyle(name: "Crimson", bodyHex: 0xD90429, roofHex: 0xA3031F),
-        CarStyle(name: "Ocean Blue", bodyHex: 0x1E90FF, roofHex: 0x1565C0),
-        CarStyle(name: "Lime", bodyHex: 0x32CD32, roofHex: 0x228B22),
-        CarStyle(name: "Gold", bodyHex: 0xFFD700, roofHex: 0xDAA520),
-        CarStyle(name: "Purple", bodyHex: 0x9B59B6, roofHex: 0x7D3C98),
-        CarStyle(name: "Hot Pink", bodyHex: 0xFF69B4, roofHex: 0xDB2777),
-        CarStyle(name: "Orange", bodyHex: 0xFF8C00, roofHex: 0xCC7000),
-        CarStyle(name: "Silver", bodyHex: 0xC0C0C0, roofHex: 0x909090),
-        CarStyle(name: "Mint", bodyHex: 0x2EE6A6, roofHex: 0x168C68),
-        CarStyle(name: "Sky", bodyHex: 0x73D2FF, roofHex: 0x2E86B8),
-        CarStyle(name: "Grape", bodyHex: 0x6C5CE7, roofHex: 0x3D348B),
-        CarStyle(name: "Taxi", bodyHex: 0xFFC300, roofHex: 0x2B2B2B)
-    ]
+    let carStyles = CarStyle.catalog
     let obstacleColors: [UInt32] = [0x1E90FF, 0xFFD700, 0x32CD32, 0xFF6347, 0x9370DB, 0xE0E0E0]
 
     var phase: GamePhase = .menu

@@ -289,21 +289,8 @@ struct GameHUDOverlay: View {
         #endif
     }
 
-    private var paintSwatches: [Color] {
-        [
-            Color(red: 0.851, green: 0.016, blue: 0.161),
-            Color(red: 0.118, green: 0.565, blue: 1.000),
-            Color(red: 0.196, green: 0.804, blue: 0.196),
-            Color(red: 1.000, green: 0.843, blue: 0.000),
-            Color(red: 0.608, green: 0.349, blue: 0.714),
-            Color(red: 1.000, green: 0.412, blue: 0.706),
-            Color(red: 1.000, green: 0.549, blue: 0.000),
-            Color(red: 0.753, green: 0.753, blue: 0.753),
-            Color(red: 0.180, green: 0.902, blue: 0.651),
-            Color(red: 0.451, green: 0.824, blue: 1.000),
-            Color(red: 0.424, green: 0.361, blue: 0.906),
-            Color(red: 1.000, green: 0.765, blue: 0.000)
-        ]
+    private var paintStyles: [CarStyle] {
+        CarStyle.catalog
     }
 
     var body: some View {
@@ -545,18 +532,52 @@ struct GameHUDOverlay: View {
     }
 
     private func paintGrid(columns: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: columns), spacing: 8) {
-            ForEach(Array(paintSwatches.enumerated()), id: \.offset) { index, color in
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 58, maximum: 86), spacing: 8), count: columns), spacing: 8) {
+            ForEach(Array(paintStyles.enumerated()), id: \.offset) { index, style in
                 Button {
                     state.inputHandler?.selectCar(index)
                 } label: {
-                    FreewayFrenzyUI.PaintSwatch(color: color, isSelected: index == state.selectedCarIndex)
+                    paintTile(style: style, isSelected: index == state.selectedCarIndex)
                 }
                 .buttonStyle(PressableButtonStyle())
             }
         }
-        .padding(10)
+        .padding(8)
         .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func paintTile(style: CarStyle, isSelected: Bool) -> some View {
+        let body = Color(hex: style.bodyHex)
+        let roof = Color(hex: style.roofHex)
+        return VStack(spacing: 5) {
+            ZStack(alignment: .topTrailing) {
+                FreewayFrenzyUI.PaintSwatch(color: body, isSelected: isSelected)
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(roof)
+                    .frame(width: 16, height: 9)
+                    .overlay(Rectangle().stroke(.black.opacity(0.45), lineWidth: 1))
+                    .offset(x: -4, y: 4)
+            }
+
+            Text(style.name.uppercased())
+                .font(.system(size: 8.5, weight: .black, design: .rounded))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.58))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 6)
+        .frame(minHeight: 58)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isSelected ? body.opacity(0.22) : .white.opacity(0.045))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(isSelected ? .white.opacity(0.85) : .white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
+        )
     }
 
     private func carArrow(_ icon: String, direction: Int) -> some View {
@@ -1620,6 +1641,16 @@ enum GameHaptics {
 private extension CGVector {
     static func / (lhs: CGVector, rhs: CGFloat) -> CGVector {
         CGVector(dx: lhs.dx / rhs, dy: lhs.dy / rhs)
+    }
+}
+
+private extension Color {
+    init(hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255.0,
+            green: Double((hex >> 8) & 0xFF) / 255.0,
+            blue: Double(hex & 0xFF) / 255.0
+        )
     }
 }
 

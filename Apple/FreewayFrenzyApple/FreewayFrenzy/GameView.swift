@@ -231,6 +231,14 @@ struct GameHUDOverlay: View {
         var menuSpacing: CGFloat {
             cramped ? 10 : 15
         }
+
+        var speedFontSize: CGFloat {
+            compact ? 34 : 40
+        }
+
+        var statSpacing: CGFloat {
+            compact ? 5 : 8
+        }
     }
 
     private func metrics(for size: CGSize) -> LayoutMetrics {
@@ -331,27 +339,25 @@ struct GameHUDOverlay: View {
 
     private func playingHUD(_ layout: LayoutMetrics) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text("\(state.speed)")
-                            .font(.system(size: 40, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText())
-                        Text("km/h")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                    statusChip
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    speedCluster(layout)
+                    Spacer(minLength: 8)
+                    statCluster(layout, compact: false)
                 }
 
-                Spacer()
+                HStack(alignment: .top, spacing: 8) {
+                    speedCluster(layout)
+                    Spacer(minLength: 6)
+                    statCluster(layout, compact: true)
+                }
 
-                VStack(alignment: .trailing, spacing: 8) {
-                    statPill(icon: "rosette", value: "\(state.score)", tint: .white)
-                    statPill(icon: "trophy.fill", value: "\(state.highScore)", tint: brandGold)
-                    statPill(icon: "circle.circle.fill", value: "\(state.coins)", tint: brandGold)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: state.coins)
+                VStack(spacing: 8) {
+                    HStack {
+                        speedCluster(layout)
+                        Spacer()
+                    }
+                    statCluster(layout, compact: true)
                 }
             }
             .padding(.horizontal, layout.horizontalPadding)
@@ -376,6 +382,33 @@ struct GameHUDOverlay: View {
             #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func speedCluster(_ layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(state.speed)")
+                    .font(.system(size: layout.speedFontSize, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+                Text("km/h")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            statusChip
+        }
+    }
+
+    private func statCluster(_ layout: LayoutMetrics, compact: Bool) -> some View {
+        let spacing = compact ? 5 : layout.statSpacing
+        return VStack(alignment: .trailing, spacing: spacing) {
+            statPill(icon: "rosette", value: "\(state.score)", tint: .white, compact: compact)
+            statPill(icon: "trophy.fill", value: "\(state.highScore)", tint: brandGold, compact: compact)
+            statPill(icon: "circle.circle.fill", value: "\(state.coins)", tint: brandGold, compact: compact)
+                .animation(.spring(response: 0.28, dampingFraction: 0.7), value: state.coins)
+        }
     }
 
     #if os(macOS)
@@ -422,18 +455,20 @@ struct GameHUDOverlay: View {
             .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
     }
 
-    private func statPill(icon: String, value: String, tint: Color) -> some View {
+    private func statPill(icon: String, value: String, tint: Color, compact: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: compact ? 15 : 17, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .contentTransition(.numericText())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.horizontal, compact ? 9 : 12)
+        .padding(.vertical, compact ? 6 : 7)
         .background(.ultraThinMaterial, in: Capsule())
     }
 

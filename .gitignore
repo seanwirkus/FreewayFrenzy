@@ -1,0 +1,37 @@
+# macOS local files
+.DS_Store
+._*
+
+# Editor / assistant local state
+.cache/
+.claude/
+.vscode/
+.idea/
+
+# Generic build output
+build/
+dist/
+tmp/
+*.log
+
+# ESP-IDF / embedded generated output
+controller/build/
+managed_components/
+
+# Xcode local state and generated output
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad/
+*.xcscmblueprint
+*.moved-aside
+*.xccheckout
+*.xcactivitylog
+*.ipa
+*.dSYM/
+*.xcarchive/
+
+# SwiftPM / package manager caches if added later
+.build/
+Packages/
+Package.resolved

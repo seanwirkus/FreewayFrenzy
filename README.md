@@ -12,6 +12,17 @@ The project is split into two parts to offload the game logic from the rendering
 
 - **FreewayFrenzy (Main Project)**: Runs on the ESP32-S3. Handles the high-resolution rendering and UI.
 - **controller/**: Runs on an ESP32-C3. Handles the physics engine, collision detection, and joystick/sensor inputs.
+- **Apple/FreewayFrenzyApple/**: Native SwiftUI + SceneKit iOS/macOS game build for App Store/TestFlight work.
+
+## Apple App Store Build
+
+Open `Apple/FreewayFrenzyApple/FreewayFrenzy.xcodeproj` in Xcode and use:
+
+- `FreewayFrenzy iOS` for iPhone/iPad, bundle ID `com.freewayfrenzy.game`.
+- `FreewayFrenzy macOS` for macOS, bundle ID `com.freewayfrenzy.game.mac`.
+
+See `Apple/FreewayFrenzyApple/README.md` for the App Store/TestFlight checklist,
+validation commands, and cloud handoff notes.
 
 ## Controls
 

@@ -32,10 +32,12 @@ Open `FreewayFrenzy.xcodeproj` in **Xcode**, then pick a scheme:
   any aspect ratio (tall phones just show more road ahead), while foreshortening
   gives real depth and a visible horizon. Earlier it was a flat orthographic camera
   that clipped the road on portrait phones.
-- **No more black screen.** The old `sin`-driven day/night cycle that drove the
-  sky to near-black was removed. The scene now uses a bright, stable sky, a
-  daylight sun + ambient rig, and gentle *bright* distance fog that only fades the
-  far spawn line to the sky colour.
+- **Stable time-of-day palettes (no black screen).** The old `sin`-driven day/night
+  cycle that drove the sky to near-black is gone. Instead, the garage **Time of Day**
+  picker (Day / Dusk / Night / Rain) now selects a *fixed, readable* `ScenePalette`
+  — sky, ambient + sun colour/intensity, fog, and a headlight/taillight glow boost.
+  Night is a deep dusk-blue with bright car lights, never black. See
+  `ScenePalette.make(_:)` in `GameView.swift`.
 - **Blocky & bigger.** Wider lanes (`laneSpacing`), chunkier cars (dark bumper
   trim, windshield, fat wheels, bold emissive lights), voxel stacked-box trees,
   clustered blocky rocks, bigger coins, hard chamfers, a punchy saturated palette,
@@ -46,6 +48,18 @@ Open `FreewayFrenzy.xcodeproj` in **Xcode**, then pick a scheme:
   preview), game-over card (NEW BEST, RETRY / MENU buttons), springy pressable
   buttons, a "GO!" burst when a run starts, numeric content transitions, a screen
   vignette, and a sky-gradient fallback behind the GPU view.
+- **Live garage rules (no more dead toggles).** Every garage control now changes
+  the run instead of just decorating the menu:
+  - **Time of Day** — Day / Dusk / Night / Rain swap the whole `ScenePalette`
+    (sky, lights, fog, car-light glow). Rain also slicks the asphalt.
+  - **Ghost Mode** — the player car turns translucent and phases through traffic
+    (`GameModel.detectCollision` early-outs; coins still count).
+  - **Police Chase** — a slice of traffic becomes white cruisers with flashing
+    red/blue roof sirens, plus tighter spawn gaps and more cars on screen.
+  - **Wet Roads** (and Rain) — reflective road sheen (low roughness + metalness)
+    and reduced steering grip for a slidey feel.
+  - **Difficulty / Traffic / Aggression / Nitro** — already feed speed, spawn
+    cadence, density, and boost strength.
 
 ### Tuning
 
@@ -84,6 +98,8 @@ Before uploading:
 - Confirm traffic and coins spawn from the fog/offscreen instead of popping near
   the player.
 - Confirm Xcode shows no AppIcon unassigned child warning.
+- Confirm each **Time of Day** renders (Night is dark-blue, never black) and that
+  **Ghost Mode**, **Police Chase**, and **Wet Roads** visibly change a run.
 
 ## Cloud handoff
 

@@ -19,6 +19,7 @@ struct Obstacle {
     var y: CGFloat = 0
     var lane = 0
     var type = 0
+    var isPolice = false
 }
 
 struct Collectible {
@@ -293,7 +294,9 @@ final class GameModel {
 
         let targetX = laneCenter(targetLane)
         let handlingFactor = min(CGFloat(selectedVehicle.handling) / 75.0, 1.4)
-        carX += (targetX - carX) * min(22 * handlingFactor * dt, 1)
+        // Wet roads cut grip, so lane changes glide in more slowly (slidey feel).
+        let gripFactor: CGFloat = garageSettings.roadsAreWet ? 0.7 : 1.0
+        carX += (targetX - carX) * min(22 * handlingFactor * gripFactor * dt, 1)
 
         baseSpeed = min(75 * garageSettings.difficulty.speedMultiplier * CGFloat(selectedVehicle.speed) / 75.0 + distance * 0.045, 280)
         let speedModifier = input.throttle * 0.01
@@ -323,7 +326,9 @@ final class GameModel {
         lastSpawnDistance += speed * 2 * dt
         let trafficFactor = 1.4 - CGFloat(garageSettings.traffic) / 100 * 0.75
         let aggressionFactor = 1.0 - CGFloat(garageSettings.aggression) / 100 * 0.15
-        let spawnGap = max((140 - CGFloat(score) * 0.8) * trafficFactor * garageSettings.difficulty.spawnMultiplier * aggressionFactor, 55)
+        // A police chase keeps the heat on: tighter spawn gaps and more cars.
+        let policeFactor: CGFloat = garageSettings.policeChase ? 0.84 : 1.0
+        let spawnGap = max((140 - CGFloat(score) * 0.8) * trafficFactor * garageSettings.difficulty.spawnMultiplier * aggressionFactor * policeFactor, 52)
         var spawnsThisFrame = 0
         while lastSpawnDistance >= spawnGap, spawnsThisFrame < 2 {
             lastSpawnDistance -= spawnGap
@@ -398,6 +403,9 @@ final class GameModel {
             }
         }
 
+        // Ghost Mode lets the player phase through traffic — no crash, just coins.
+        guard !garageSettings.ghostMode else { return }
+
         for obstacle in obstacles where obstacle.active {
             let ox = laneCenter(obstacle.lane)
             let obstacleRect = CGRect(x: ox - obstacleSize.width / 2, y: obstacle.y, width: obstacleSize.width, height: obstacleSize.height)
@@ -431,10 +439,13 @@ final class GameModel {
                 }
             }
         } else {
-            let maxObs = min(2 + score / 18 + garageSettings.traffic / 25, 10)
+            let policeBonus = garageSettings.policeChase ? 2 : 0
+            let maxObs = min(2 + score / 18 + garageSettings.traffic / 25 + policeBonus, 12)
             guard activeObstacles < maxObs else { return }
+            // During a police chase, a slice of the traffic becomes flashing cruisers.
+            let isPolice = garageSettings.policeChase && (fastRand() % 100) < 26
             for index in obstacles.indices where !obstacles[index].active {
-                obstacles[index] = Obstacle(active: true, y: spawnY, lane: lane, type: Int(fastRand() % 6))
+                obstacles[index] = Obstacle(active: true, y: spawnY, lane: lane, type: Int(fastRand() % 6), isPolice: isPolice)
                 return
             }
         }

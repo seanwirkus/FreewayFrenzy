@@ -33,6 +33,7 @@ fileprivate struct HUDSnapshot: Sendable, Equatable {
     let selectedPaintIndex: Int
     let selectedRouteIndex: Int
     let paintHex: UInt32
+    let skyHex: UInt32
     let timeOfDay: TimeOfDay
     let difficulty: DifficultyLevel
     let trafficLevel: Int
@@ -59,6 +60,7 @@ final class GameHUDState: ObservableObject {
     @Published var selectedPaintIndex = 0
     @Published var selectedRouteIndex = 0
     @Published var paintHex: UInt32 = 0xE63946
+    @Published var skyHex: UInt32 = 0x6BBDF2
     @Published var garageTab: GarageTab = .vehicle
     @Published var timeOfDay: TimeOfDay = .day
     @Published var difficulty: DifficultyLevel = .street
@@ -98,6 +100,7 @@ final class GameHUDState: ObservableObject {
         selectedPaintIndex = snapshot.selectedPaintIndex
         selectedRouteIndex = snapshot.selectedRouteIndex
         paintHex = snapshot.paintHex
+        skyHex = snapshot.skyHex
         timeOfDay = snapshot.timeOfDay
         difficulty = snapshot.difficulty
         trafficLevel = snapshot.trafficLevel
@@ -160,8 +163,9 @@ struct GameView: View {
         if state.phase == .menu {
             FreewayFrenzyUI.garageBackground.ignoresSafeArea(.all)
         } else {
-            // Solid sky — must match PlatformColor.sky / scene.background exactly.
-            GameSky.top.ignoresSafeArea(.all)
+            // Solid sky — tracks the live time-of-day palette so the GPU view never
+            // reveals a mismatched band behind it.
+            Color(hex: state.skyHex).ignoresSafeArea(.all)
         }
     }
 
@@ -761,6 +765,13 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     private var cachedViewHeight: CGFloat = 852
     private var simulationTime: TimeInterval = 0
 
+    // Time-of-day scene palette: re-applied only when the selection (or wet state)
+    // actually changes, so day/dusk/night/rain are stable, not an animated cycle.
+    private var lastAppliedTimeOfDay: TimeOfDay?
+    private var lastAppliedWet: Bool?
+    private var currentLightsBoost: CGFloat = 1.0
+    private var currentSkyHex: UInt32 = 0x6BBDF2
+
     private let world = SCNNode()
     private let roadRoot = SCNNode()
     private let sceneryRoot = SCNNode()
@@ -1226,17 +1237,38 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             buildPlayer()
         } else {
             let style = model.selectedCarStyle
-            applyCarColors(playerNode, body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true)
+            applyCarColors(playerNode, body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true, lightsBoost: currentLightsBoost)
         }
     }
 
     private func buildObstacles() {
         for _ in 0..<model.maxObstacles {
             let node = buildCar(type: [.sedan, .sports, .suv].randomElement() ?? .sedan, body: .hex(model.obstacleColorHex(for: Int.random(in: 0..<6))), roof: .hex(GarageCatalog.darken(model.obstacleColorHex(for: 0), factor: 0.72)), isPlayer: false)
+            node.addChildNode(makeSiren())
             node.isHidden = true
             obstacleRoot.addChildNode(node)
             obstacleNodes.append(node)
         }
+    }
+
+    /// A pre-built, hidden roof light bar. Shown + flashed only on police cruisers.
+    private func makeSiren() -> SCNNode {
+        let bar = SCNNode()
+        bar.name = "siren"
+        bar.isHidden = true
+        bar.addChildNode(sirenBulb(name: "sirenRed", color: .sirenRed, x: -0.16))
+        bar.addChildNode(sirenBulb(name: "sirenBlue", color: .sirenBlue, x: 0.16))
+        return bar
+    }
+
+    private func sirenBulb(name: String, color: PlatformColor, x: CGFloat) -> SCNNode {
+        let bulb = slab(width: 0.2, height: 0.12, length: 0.24, color: color, chamfer: 0.02)
+        bulb.name = name
+        bulb.castsShadow = false
+        bulb.geometry?.firstMaterial?.emission.contents = color
+        bulb.geometry?.firstMaterial?.emission.intensity = 0.04
+        bulb.position = SCNVector3(x, 0.98, 0)
+        return bulb
     }
     
     private func buildCoins() {
@@ -1258,6 +1290,7 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     }
 
     private func updateWorld(time: TimeInterval) {
+        applyScenePaletteIfNeeded()
         let scroll = model.roadScroll / 18
         for (index, segment) in roadSegments.enumerated() {
             segment.position.z = SCNFloat(wrapZ(-CGFloat(index) * 5.2 + scroll.truncatingRemainder(dividingBy: 5.2), spacing: 18 * 5.2, near: 16))
@@ -1271,14 +1304,51 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         }
 
         updatePlayer(time: time)
-        updateObstacles()
+        updateObstacles(time: time)
         updateCoins()
         updateDebris()
         updateCamera(time: time)
     }
 
+    // MARK: Time-of-day palette
+
+    private func applyScenePaletteIfNeeded() {
+        let tod = model.garageSettings.timeOfDay
+        let wet = model.garageSettings.roadsAreWet
+        guard lastAppliedTimeOfDay != tod || lastAppliedWet != wet else { return }
+        lastAppliedTimeOfDay = tod
+        lastAppliedWet = wet
+        applyScenePalette(ScenePalette.make(tod), wet: wet)
+    }
+
+    private func applyScenePalette(_ palette: ScenePalette, wet: Bool) {
+        let sky = PlatformColor.hex(palette.skyHex)
+        scene.background.contents = sky
+        scene.fogColor = sky
+
+        ambientNode.light?.color = palette.ambient
+        ambientNode.light?.intensity = palette.ambientIntensity
+        sunNode.light?.color = palette.sun
+        sunNode.light?.intensity = palette.sunIntensity
+        sunNode.light?.shadowColor = PlatformColor(white: 0, alpha: palette.sunShadowAlpha)
+
+        // Wet asphalt: low roughness + a little metalness gives a reflective sheen.
+        let roughness = wet ? 0.32 : palette.roadRoughness
+        let metalness = wet ? 0.22 : palette.roadMetalness
+        for segment in roadSegments {
+            segment.geometry?.firstMaterial?.roughness.contents = roughness
+            segment.geometry?.firstMaterial?.metalness.contents = metalness
+        }
+
+        currentLightsBoost = palette.lightsBoost
+        currentSkyHex = palette.skyHex
+    }
+
     private func updatePlayer(time: TimeInterval) {
         rebuildPlayerIfNeeded()
+        // Ghost Mode renders the player car as a translucent phantom.
+        let ghostTarget: CGFloat = model.garageSettings.ghostMode ? 0.5 : 1.0
+        playerNode.opacity += (ghostTarget - playerNode.opacity) * 0.2
         let laneProgress = model.phase == .menu ? 0 : (model.carX - model.laneCenter(2)) / model.laneWidth
         let targetX = laneProgress * Self.laneSpacing
         let currentX = CGFloat(playerNode.position.x)
@@ -1295,7 +1365,7 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         }
     }
 
-    private func updateObstacles() {
+    private func updateObstacles(time: TimeInterval) {
         for index in obstacleNodes.indices {
             guard index < model.obstacles.count, model.obstacles[index].active else {
                 obstacleNodes[index].isHidden = true
@@ -1307,8 +1377,25 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             node.isHidden = false
             node.opacity = spawnOpacity(for: obstacle.y)
             node.position = SCNVector3(laneX(model.clampedLane(obstacle.lane)), 0.42, zForLogicY(obstacle.y))
-            applyCarColors(node, body: .hex(model.obstacleColorHex(for: obstacle.type)), roof: .charcoal, isPlayer: false)
+            // Police cruisers keep a cool monochrome body so the siren reads clearly.
+            let bodyColor: PlatformColor = obstacle.isPolice ? .police : .hex(model.obstacleColorHex(for: obstacle.type))
+            applyCarColors(node, body: bodyColor, roof: .charcoal, isPlayer: false, lightsBoost: currentLightsBoost)
+            updateSiren(on: node, isPolice: obstacle.isPolice, seed: index, time: time)
         }
+    }
+
+    private func updateSiren(on node: SCNNode, isPolice: Bool, seed: Int, time: TimeInterval) {
+        guard let siren = node.childNode(withName: "siren", recursively: false) else { return }
+        guard isPolice else {
+            if !siren.isHidden { siren.isHidden = true }
+            return
+        }
+        siren.isHidden = false
+        let beat = sin(time * 11 + Double(seed) * 1.7) > 0
+        siren.childNode(withName: "sirenRed", recursively: false)?
+            .geometry?.firstMaterial?.emission.intensity = beat ? 1.4 : 0.04
+        siren.childNode(withName: "sirenBlue", recursively: false)?
+            .geometry?.firstMaterial?.emission.intensity = beat ? 0.04 : 1.4
     }
     
     private func updateCoins() {
@@ -1391,6 +1478,7 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             selectedPaintIndex: model.selectedPaintIndex,
             selectedRouteIndex: model.selectedRouteIndex,
             paintHex: model.bodyHex,
+            skyHex: currentSkyHex,
             timeOfDay: settings.timeOfDay,
             difficulty: settings.difficulty,
             trafficLevel: settings.traffic,
@@ -1684,7 +1772,7 @@ private func buildCar(type: CarBodyType, body: PlatformColor, roof: PlatformColo
     return root
 }
 
-private func applyCarColors(_ node: SCNNode, body: PlatformColor, roof: PlatformColor, isPlayer: Bool) {
+private func applyCarColors(_ node: SCNNode, body: PlatformColor, roof: PlatformColor, isPlayer: Bool, lightsBoost: CGFloat = 1.0) {
     node.enumerateChildNodes { child, _ in
         if child.name == "body" {
             child.geometry?.firstMaterial?.diffuse.contents = body
@@ -1693,8 +1781,9 @@ private func applyCarColors(_ node: SCNNode, body: PlatformColor, roof: Platform
         }
     }
 
-    let headlightIntensity = isPlayer ? 0.55 : 0.28
-    let taillightIntensity = isPlayer ? 0.85 : 0.55
+    // Headlights/taillights glow brighter at dusk/night/rain via the palette boost.
+    let headlightIntensity = (isPlayer ? 0.55 : 0.28) * lightsBoost
+    let taillightIntensity = (isPlayer ? 0.85 : 0.55) * lightsBoost
     for name in ["headlightL", "headlightR"] {
         let mat = node.childNode(withName: name, recursively: true)?.geometry?.firstMaterial
         mat?.diffuse.contents = PlatformColor.headlight
@@ -1814,6 +1903,50 @@ private extension CGVector {
 }
 
 
+/// A stable lighting/sky/road palette for a time of day. Picking Night gives a
+/// fixed, readable dusk-blue scene — deliberately *not* the old animated cycle
+/// that drove the sky to black.
+private struct ScenePalette {
+    let skyHex: UInt32
+    let ambient: PlatformColor
+    let ambientIntensity: CGFloat
+    let sun: PlatformColor
+    let sunIntensity: CGFloat
+    let sunShadowAlpha: CGFloat
+    let lightsBoost: CGFloat
+    let roadRoughness: CGFloat
+    let roadMetalness: CGFloat
+
+    static func make(_ tod: TimeOfDay) -> ScenePalette {
+        switch tod {
+        case .day:
+            return ScenePalette(
+                skyHex: 0x6BBDF2,
+                ambient: PlatformColor(red: 0.86, green: 0.92, blue: 0.98, alpha: 1), ambientIntensity: 720,
+                sun: PlatformColor(red: 1.0, green: 0.98, blue: 0.92, alpha: 1), sunIntensity: 1150, sunShadowAlpha: 0.28,
+                lightsBoost: 1.0, roadRoughness: 0.92, roadMetalness: 0.02)
+        case .dusk:
+            return ScenePalette(
+                skyHex: 0xF6915A,
+                ambient: PlatformColor(red: 0.64, green: 0.47, blue: 0.45, alpha: 1), ambientIntensity: 470,
+                sun: PlatformColor(red: 1.0, green: 0.72, blue: 0.46, alpha: 1), sunIntensity: 880, sunShadowAlpha: 0.34,
+                lightsBoost: 1.7, roadRoughness: 0.9, roadMetalness: 0.05)
+        case .night:
+            return ScenePalette(
+                skyHex: 0x1A2546,
+                ambient: PlatformColor(red: 0.34, green: 0.40, blue: 0.60, alpha: 1), ambientIntensity: 330,
+                sun: PlatformColor(red: 0.62, green: 0.71, blue: 0.96, alpha: 1), sunIntensity: 360, sunShadowAlpha: 0.16,
+                lightsBoost: 2.3, roadRoughness: 0.85, roadMetalness: 0.07)
+        case .rain:
+            return ScenePalette(
+                skyHex: 0x8893A0,
+                ambient: PlatformColor(red: 0.64, green: 0.68, blue: 0.74, alpha: 1), ambientIntensity: 560,
+                sun: PlatformColor(red: 0.82, green: 0.86, blue: 0.92, alpha: 1), sunIntensity: 540, sunShadowAlpha: 0.12,
+                lightsBoost: 1.5, roadRoughness: 0.34, roadMetalness: 0.2)
+        }
+    }
+}
+
 private extension PlatformColor {
     static var sky: PlatformColor { PlatformColor(red: 0.42, green: 0.74, blue: 0.95, alpha: 1) }
     static var road: PlatformColor { PlatformColor(red: 0.27, green: 0.29, blue: 0.33, alpha: 1) }
@@ -1837,6 +1970,9 @@ private extension PlatformColor {
     static var tailLight: PlatformColor { PlatformColor(red: 1.0, green: 0.18, blue: 0.16, alpha: 1) }
     static var coral: PlatformColor { PlatformColor(red: 1.0, green: 0.25, blue: 0.18, alpha: 1) }
     static var mint: PlatformColor { PlatformColor(red: 0.48, green: 1.0, blue: 0.66, alpha: 1) }
+    static var police: PlatformColor { PlatformColor(red: 0.93, green: 0.94, blue: 0.96, alpha: 1) }
+    static var sirenRed: PlatformColor { PlatformColor(red: 1.0, green: 0.13, blue: 0.18, alpha: 1) }
+    static var sirenBlue: PlatformColor { PlatformColor(red: 0.20, green: 0.42, blue: 1.0, alpha: 1) }
 
     static func hex(_ hex: UInt32) -> PlatformColor {
         PlatformColor(

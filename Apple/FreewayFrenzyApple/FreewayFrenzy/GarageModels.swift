@@ -156,6 +156,10 @@ struct GarageSettings: Sendable, Equatable {
     var policeChase: Bool = false
     var wetRoads: Bool = false
     var ghostMode: Bool = false
+
+    /// Roads are slick when the player opts into wet roads or when it's raining.
+    /// Drives the reflective road sheen and reduced steering grip.
+    var roadsAreWet: Bool { wetRoads || timeOfDay == .rain }
 }
 
 enum GarageCatalog {

@@ -1,9 +1,9 @@
-/****************************************************************************
- * uart_joystick.h – UART2 Joystick Receiver for ESP32-S3
- ***************************************************************************/
+/******************************************************************************
+ * uart_joystick.h – UART2 sensor receiver for ESP32-S3
+ *****************************************************************************/
 #pragma once
 
 /**
- * @brief Initialize UART2 (on GPIO 15/16) and start the listener task.
+ * @brief Initialize UART2 (GPIO43 TX / GPIO44 RX) and start the listener task.
  */
 void uart_joystick_init(void);

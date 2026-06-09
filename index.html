@@ -80,6 +80,12 @@ const L_OBS_W        = 26;
 const L_OBS_H        = 42;
 const MAX_OBSTACLES  = 12;
 const CRASH_ANIM_S   = 1.2;
+const BOOST_CHARGE_S = 4.0;
+const BOOST_RELEASE_S = 2.4;
+const BOOST_EXP_K    = 2.35;
+const BOOST_MIN_GAIN = 0.55;
+const BOOST_EXTRA_GAIN = 1.75;
+const BOOST_MAX_SPEED = 820.0;
 
 // ─── Render-space constants (S3 display: 1024×600 = C3 × 2) ──────────────────
 const C3_SCALE       = 2;
@@ -132,6 +138,12 @@ let selectedCarColor = 0;
 
 function makeObs() {
   return { active: false, y: 0, lane: 0, type: 0 };
+}
+
+function normalizedExpRamp(t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return (Math.exp(BOOST_EXP_K * t) - 1.0) / (Math.exp(BOOST_EXP_K) - 1.0);
 }
 
 function resetGame() {
@@ -244,21 +256,23 @@ function updatePhysics(dt, steer, throttle) {
   const boosting  = speed_mod > 0.1;
 
   if (boosting) {
-    gs.boost_hold_s = Math.min(gs.boost_hold_s + dt, 5.0);
+    gs.boost_hold_s = Math.min(gs.boost_hold_s + dt, BOOST_CHARGE_S);
   } else {
-    gs.boost_hold_s = Math.max(gs.boost_hold_s - dt * 2.0, 0.0);
+    gs.boost_hold_s = Math.max(gs.boost_hold_s - dt * BOOST_RELEASE_S, 0.0);
   }
-  const boost_ramp = Math.min(gs.boost_hold_s / 5.0, 1.0);
+  const boost_ramp = Math.min(gs.boost_hold_s / BOOST_CHARGE_S, 1.0);
+  const boost_curve = normalizedExpRamp(boost_ramp);
 
   let target_speed;
   if (boosting) {
-    target_speed = gs.base_speed * (1.0 + speed_mod * 0.6 * (1.0 + boost_ramp));
+    const boost_strength = BOOST_MIN_GAIN + boost_curve * BOOST_EXTRA_GAIN;
+    target_speed = Math.min(gs.base_speed * (1.0 + speed_mod * boost_strength), BOOST_MAX_SPEED);
   } else if (speed_mod < -0.1) {
     target_speed = Math.max(gs.base_speed * (1.0 + speed_mod * 0.75), 15.0);
   } else {
     target_speed = gs.base_speed;
   }
-  const sp_lerp = speed_mod < -0.1 ? 5.0 : 3.0;
+  const sp_lerp = speed_mod < -0.1 ? 5.0 : (boosting ? 3.2 + boost_curve * 2.4 : 3.0);
   gs.speed += (target_speed - gs.speed) * sp_lerp * dt;
   if (gs.speed < 0) gs.speed = 0;
 

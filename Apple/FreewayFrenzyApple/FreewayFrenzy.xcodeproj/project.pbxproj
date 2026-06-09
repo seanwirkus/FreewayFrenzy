@@ -13,12 +13,19 @@
 		A10000000000000000000004 /* FreewayFrenzyUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* FreewayFrenzyUI.swift */; };
 		A10000000000000000000005 /* SoundController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SoundController.swift */; };
 		A10000000000000000000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Assets.xcassets */; };
+		A10000000000000000000007 /* IsoCarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* IsoCarView.swift */; };
+		A10000000000000000000008 /* GarageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* GarageModels.swift */; };
+		A10000000000000000000009 /* GarageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* GarageView.swift */; };
 		A10000000000000000000011 /* FreewayFrenzyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* FreewayFrenzyApp.swift */; };
 		A10000000000000000000012 /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* GameView.swift */; };
 		A10000000000000000000013 /* GameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* GameModel.swift */; };
 		A10000000000000000000014 /* FreewayFrenzyUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* FreewayFrenzyUI.swift */; };
 		A10000000000000000000015 /* SoundController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SoundController.swift */; };
 		A10000000000000000000016 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Assets.xcassets */; };
+		A10000000000000000000017 /* IsoCarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* IsoCarView.swift */; };
+		A10000000000000000000018 /* GarageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* GarageModels.swift */; };
+		A10000000000000000000019 /* GarageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* GarageView.swift */; };
+		A1000000000000000000001A /* FullScreenHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* FullScreenHost.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +35,10 @@
 		A20000000000000000000004 /* FreewayFrenzyUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreewayFrenzyUI.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* SoundController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundController.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000008 /* IsoCarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsoCarView.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* GarageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageModels.swift; sourceTree = "<group>"; };
+		A2000000000000000000000A /* GarageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarageView.swift; sourceTree = "<group>"; };
+		A2000000000000000000000B /* FullScreenHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenHost.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		A20000000000000000000010 /* FreewayFrenzy iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FreewayFrenzy iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000011 /* FreewayFrenzy macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FreewayFrenzy macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -68,6 +79,10 @@
 				A20000000000000000000003 /* GameModel.swift */,
 				A20000000000000000000004 /* FreewayFrenzyUI.swift */,
 				A20000000000000000000005 /* SoundController.swift */,
+				A20000000000000000000008 /* IsoCarView.swift */,
+				A20000000000000000000009 /* GarageModels.swift */,
+				A2000000000000000000000A /* GarageView.swift */,
+				A2000000000000000000000B /* FullScreenHost.swift */,
 				A20000000000000000000006 /* Assets.xcassets */,
 			);
 			path = FreewayFrenzy;
@@ -185,6 +200,10 @@
 				A10000000000000000000003 /* GameModel.swift in Sources */,
 				A10000000000000000000004 /* FreewayFrenzyUI.swift in Sources */,
 				A10000000000000000000005 /* SoundController.swift in Sources */,
+				A10000000000000000000007 /* IsoCarView.swift in Sources */,
+				A10000000000000000000008 /* GarageModels.swift in Sources */,
+				A10000000000000000000009 /* GarageView.swift in Sources */,
+				A1000000000000000000001A /* FullScreenHost.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,6 +216,9 @@
 				A10000000000000000000013 /* GameModel.swift in Sources */,
 				A10000000000000000000014 /* FreewayFrenzyUI.swift in Sources */,
 				A10000000000000000000015 /* SoundController.swift in Sources */,
+				A10000000000000000000017 /* IsoCarView.swift in Sources */,
+				A10000000000000000000018 /* GarageModels.swift in Sources */,
+				A10000000000000000000019 /* GarageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

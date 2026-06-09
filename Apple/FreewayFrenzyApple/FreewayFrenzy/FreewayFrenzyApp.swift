@@ -4,7 +4,13 @@ import SwiftUI
 struct FreewayFrenzyApp: App {
     var body: some Scene {
         WindowGroup {
+            #if os(iOS)
+            FullScreenHost {
+                GameView()
+            }
+            #else
             GameView()
+            #endif
         }
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)

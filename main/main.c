@@ -1,17 +1,18 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include <stdint.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "game_ui.h"
 #include "i2c.h"
 #include "io_extension.h"
-#include "rgb_lcd_port.h"
 #include "lvgl_port.h"
-#include "game_ui.h"
+#include "rgb_lcd_port.h"
 #include "uart_joystick.h"
 
-static const char *TAG = "test";
+static const char *TAG = "front_scope";
 
 void app_main(void)
 {
@@ -36,15 +37,17 @@ void app_main(void)
     ESP_LOGI(TAG, "Init LVGL");
     ESP_ERROR_CHECK(lvgl_port_init(panel, NULL));
 
-    ESP_LOGI(TAG, "Init game UI");
+    ESP_LOGI(TAG, "Init dashboard UI");
     if (lvgl_port_lock(-1)) {
         game_ui_init();
         lvgl_port_unlock();
     }
 
-    ESP_LOGI(TAG, "Start UART renderer link");
+    ESP_LOGI(TAG, "Start C3 sensor link");
     uart_joystick_init();
 
     ESP_LOGI(TAG, "Done");
-    while (1) vTaskDelay(pdMS_TO_TICKS(1000));
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }

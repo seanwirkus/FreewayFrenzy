@@ -12,21 +12,6 @@ struct CarStyle: Equatable {
     let name: String
     let bodyHex: UInt32
     let roofHex: UInt32
-
-    static let catalog = [
-        CarStyle(name: "Crimson", bodyHex: 0xD90429, roofHex: 0xA3031F),
-        CarStyle(name: "Ocean Blue", bodyHex: 0x1E90FF, roofHex: 0x1565C0),
-        CarStyle(name: "Lime", bodyHex: 0x32CD32, roofHex: 0x228B22),
-        CarStyle(name: "Gold", bodyHex: 0xFFD700, roofHex: 0xDAA520),
-        CarStyle(name: "Purple", bodyHex: 0x9B59B6, roofHex: 0x7D3C98),
-        CarStyle(name: "Hot Pink", bodyHex: 0xFF69B4, roofHex: 0xDB2777),
-        CarStyle(name: "Orange", bodyHex: 0xFF8C00, roofHex: 0xCC7000),
-        CarStyle(name: "Silver", bodyHex: 0xC0C0C0, roofHex: 0x909090),
-        CarStyle(name: "Mint", bodyHex: 0x2EE6A6, roofHex: 0x168C68),
-        CarStyle(name: "Sky", bodyHex: 0x73D2FF, roofHex: 0x2E86B8),
-        CarStyle(name: "Grape", bodyHex: 0x6C5CE7, roofHex: 0x3D348B),
-        CarStyle(name: "Taxi", bodyHex: 0xFFC300, roofHex: 0x2B2B2B)
-    ]
 }
 
 struct Obstacle {
@@ -72,11 +57,13 @@ final class GameModel {
     let crashDuration: TimeInterval = 1.2
     let spawnY: CGFloat = -96
 
-    let carStyles = CarStyle.catalog
     let obstacleColors: [UInt32] = [0x1E90FF, 0xFFD700, 0x32CD32, 0xFF6347, 0x9370DB, 0xE0E0E0]
 
     var phase: GamePhase = .menu
-    var selectedCarIndex = 0
+    var selectedVehicleIndex = 0
+    var selectedPaintIndex = 0
+    var selectedRouteIndex = 0
+    var garageSettings = GarageSettings()
     var carX: CGFloat = 0
     var targetLane = 2
     var speed: CGFloat = 0
@@ -104,7 +91,6 @@ final class GameModel {
     private var rng: UInt32 = 12_345
     private var previousStart = false
     private var previousMenu = false
-    private var menuColorDebounce: TimeInterval = 0
 
     init() {
         obstacles = Array(repeating: Obstacle(), count: maxObstacles)
@@ -129,12 +115,38 @@ final class GameModel {
         roadSurfaceLeft + laneWidth / 2 + CGFloat(clampedLane(lane)) * laneWidth
     }
 
-    var selectedCarStyle: CarStyle {
-        guard !carStyles.isEmpty else {
-            return CarStyle(name: "Crimson", bodyHex: 0xD90429, roofHex: 0xA3031F)
+    var selectedVehicle: VehicleDefinition {
+        guard !VehicleDefinition.catalog.isEmpty else {
+            return VehicleDefinition.catalog[0]
         }
-        selectedCarIndex = selectedCarIndex.clamped(to: 0...(carStyles.count - 1))
-        return carStyles[selectedCarIndex]
+        selectedVehicleIndex = selectedVehicleIndex.clamped(to: 0...(VehicleDefinition.catalog.count - 1))
+        return VehicleDefinition.catalog[selectedVehicleIndex]
+    }
+
+    var selectedRoute: RouteDefinition {
+        guard !RouteDefinition.catalog.isEmpty else {
+            return RouteDefinition.catalog[0]
+        }
+        selectedRouteIndex = selectedRouteIndex.clamped(to: 0...(RouteDefinition.catalog.count - 1))
+        return RouteDefinition.catalog[selectedRouteIndex]
+    }
+
+    var bodyHex: UInt32 {
+        guard !PaintOption.catalog.isEmpty else { return 0xE63946 }
+        selectedPaintIndex = selectedPaintIndex.clamped(to: 0...(PaintOption.catalog.count - 1))
+        return PaintOption.catalog[selectedPaintIndex].hex
+    }
+
+    var roofHex: UInt32 {
+        GarageCatalog.darken(bodyHex, factor: 0.75)
+    }
+
+    var selectedCarStyle: CarStyle {
+        CarStyle(name: selectedVehicle.name, bodyHex: bodyHex, roofHex: roofHex)
+    }
+
+    var selectedBodyType: CarBodyType {
+        selectedVehicle.type
     }
 
     func obstacleColorHex(for type: Int) -> UInt32 {
@@ -147,19 +159,8 @@ final class GameModel {
     }
 
     func nudgeLane(_ direction: Int, now: TimeInterval) {
-        let debounce: TimeInterval = phase == .menu ? 0.18 : 0.045
+        let debounce: TimeInterval = phase == .menu ? 0.18 : 0.028
         guard direction != 0, now - lastLaneChangeTime >= debounce else { return }
-
-        if phase == .menu {
-            if direction < 0 {
-                selectedCarIndex = (selectedCarIndex + carStyles.count - 1).positiveModulo(carStyles.count)
-            } else {
-                selectedCarIndex = (selectedCarIndex + 1).positiveModulo(carStyles.count)
-            }
-            lastLaneChangeTime = now
-            return
-        }
-
         guard phase == .playing else { return }
         let newLane = max(0, min(laneCount - 1, targetLane + direction))
         guard newLane != targetLane else { return }
@@ -167,9 +168,62 @@ final class GameModel {
         lastLaneChangeTime = now
     }
 
-    func selectCar(_ index: Int) {
-        guard phase == .menu, !carStyles.isEmpty else { return }
-        selectedCarIndex = index.clamped(to: 0...(carStyles.count - 1))
+    func selectVehicle(_ index: Int) {
+        guard phase == .menu, !VehicleDefinition.catalog.isEmpty else { return }
+        selectedVehicleIndex = index.clamped(to: 0...(VehicleDefinition.catalog.count - 1))
+        if let paintIndex = PaintOption.catalog.firstIndex(where: { $0.hex == selectedVehicle.defaultColorHex }) {
+            selectedPaintIndex = paintIndex
+        }
+    }
+
+    func selectPaint(_ index: Int) {
+        guard phase == .menu, !PaintOption.catalog.isEmpty else { return }
+        selectedPaintIndex = index.clamped(to: 0...(PaintOption.catalog.count - 1))
+    }
+
+    func selectRoute(_ index: Int) {
+        guard phase == .menu, !RouteDefinition.catalog.isEmpty else { return }
+        selectedRouteIndex = index.clamped(to: 0...(RouteDefinition.catalog.count - 1))
+    }
+
+    func setDifficulty(_ level: DifficultyLevel) {
+        guard phase == .menu else { return }
+        garageSettings.difficulty = level
+    }
+
+    func setTimeOfDay(_ tod: TimeOfDay) {
+        guard phase == .menu else { return }
+        garageSettings.timeOfDay = tod
+    }
+
+    func setTraffic(_ value: Int) {
+        guard phase == .menu else { return }
+        garageSettings.traffic = value.clamped(to: 0...100)
+    }
+
+    func setAggression(_ value: Int) {
+        guard phase == .menu else { return }
+        garageSettings.aggression = value.clamped(to: 0...100)
+    }
+
+    func setNitroBoosts(_ value: Int) {
+        guard phase == .menu else { return }
+        garageSettings.nitroBoosts = value.clamped(to: 1...5)
+    }
+
+    func setPoliceChase(_ value: Bool) {
+        guard phase == .menu else { return }
+        garageSettings.policeChase = value
+    }
+
+    func setWetRoads(_ value: Bool) {
+        guard phase == .menu else { return }
+        garageSettings.wetRoads = value
+    }
+
+    func setGhostMode(_ value: Bool) {
+        guard phase == .menu else { return }
+        garageSettings.ghostMode = value
     }
 
     func update(deltaTime rawDelta: TimeInterval, now: TimeInterval, input: GameInput) {
@@ -192,7 +246,6 @@ final class GameModel {
             roadScroll = wrapRoadScroll(roadScroll + 40 * deltaTime)
             speed = 0
             carX = laneCenter(2)
-            updateMenuColor(now: now, steer: input.steer)
             return
         }
 
@@ -213,7 +266,8 @@ final class GameModel {
         carX = laneCenter(2)
         targetLane = 2
         speed = 0
-        baseSpeed = 75
+        let vehicleSpeedFactor = CGFloat(selectedVehicle.speed) / 75.0
+        baseSpeed = 75 * garageSettings.difficulty.speedMultiplier * vehicleSpeedFactor
         distance = 0
         score = 0
         coinsCollected = 0
@@ -234,33 +288,24 @@ final class GameModel {
         phase = keepPhase ? currentPhase : .playing
     }
 
-    private func updateMenuColor(now: TimeInterval, steer: CGFloat) {
-        guard now - menuColorDebounce > 0.28 else { return }
-        if steer < -40 {
-            selectedCarIndex = (selectedCarIndex + carStyles.count - 1).positiveModulo(carStyles.count)
-            menuColorDebounce = now
-        } else if steer > 40 {
-            selectedCarIndex = (selectedCarIndex + 1).positiveModulo(carStyles.count)
-            menuColorDebounce = now
-        }
-    }
-
     private func updatePlaying(deltaTime: TimeInterval, now: TimeInterval, input: GameInput) {
         let dt = CGFloat(deltaTime)
 
         let targetX = laneCenter(targetLane)
-        carX += (targetX - carX) * min(22 * dt, 1)
+        let handlingFactor = min(CGFloat(selectedVehicle.handling) / 75.0, 1.4)
+        carX += (targetX - carX) * min(22 * handlingFactor * dt, 1)
 
-        baseSpeed = min(75 + distance * 0.045, 250)
+        baseSpeed = min(75 * garageSettings.difficulty.speedMultiplier * CGFloat(selectedVehicle.speed) / 75.0 + distance * 0.045, 280)
         let speedModifier = input.throttle * 0.01
         let boosting = speedModifier > 0.1
         boostHold = boosting ? min(boostHold + deltaTime, 4) : max(boostHold - deltaTime * 2.4, 0)
 
         let boostRamp = min(boostHold / 4, 1)
         let boostCurve = normalizedExpRamp(CGFloat(boostRamp))
+        let nitroFactor = 1.0 + CGFloat(garageSettings.nitroBoosts - 1) * 0.08
         let targetSpeed: CGFloat
         if boosting {
-            targetSpeed = min(baseSpeed * (1 + speedModifier * (0.55 + boostCurve * 1.75)), 820)
+            targetSpeed = min(baseSpeed * (1 + speedModifier * (0.55 + boostCurve * 1.75)) * nitroFactor, 820)
         } else if speedModifier < -0.1 {
             targetSpeed = max(baseSpeed * (1 + speedModifier * 0.75), 15)
         } else {
@@ -276,7 +321,9 @@ final class GameModel {
         score = Int(distance / 10)
 
         lastSpawnDistance += speed * 2 * dt
-        let spawnGap = max(140 - CGFloat(score) * 0.8, 70)
+        let trafficFactor = 1.4 - CGFloat(garageSettings.traffic) / 100 * 0.75
+        let aggressionFactor = 1.0 - CGFloat(garageSettings.aggression) / 100 * 0.15
+        let spawnGap = max((140 - CGFloat(score) * 0.8) * trafficFactor * garageSettings.difficulty.spawnMultiplier * aggressionFactor, 55)
         var spawnsThisFrame = 0
         while lastSpawnDistance >= spawnGap, spawnsThisFrame < 2 {
             lastSpawnDistance -= spawnGap
@@ -340,7 +387,7 @@ final class GameModel {
 
     private func detectCollision(now: TimeInterval) {
         let carRect = CGRect(x: carX - carSize.width / 2, y: carY, width: carSize.width, height: carSize.height)
-        
+
         for index in coins.indices where coins[index].active {
             let cx = laneCenter(coins[index].lane)
             let coinRect = CGRect(x: cx - 12, y: coins[index].y - 12, width: 24, height: 24)
@@ -348,7 +395,6 @@ final class GameModel {
                 coins[index].active = false
                 coinsCollected += 1
                 score += 5
-                // Sound will be played by view controller via an action or we can just observe score jump
             }
         }
 
@@ -385,7 +431,8 @@ final class GameModel {
                 }
             }
         } else {
-            guard activeObstacles < min(2 + score / 18, 8) else { return }
+            let maxObs = min(2 + score / 18 + garageSettings.traffic / 25, 10)
+            guard activeObstacles < maxObs else { return }
             for index in obstacles.indices where !obstacles[index].active {
                 obstacles[index] = Obstacle(active: true, y: spawnY, lane: lane, type: Int(fastRand() % 6))
                 return
@@ -416,8 +463,6 @@ final class GameModel {
                 return false
             }
         }
-        let activeAtSpawn = obstacles.filter { $0.active && abs($0.y - spawnY) < 150 }.count
-        if activeAtSpawn >= 1 { return false }
         return true
     }
 

@@ -29,7 +29,18 @@ fileprivate struct HUDSnapshot: Sendable, Equatable {
     let carRoofR: Double
     let carRoofG: Double
     let carRoofB: Double
-    let selectedCarIndex: Int
+    let selectedVehicleIndex: Int
+    let selectedPaintIndex: Int
+    let selectedRouteIndex: Int
+    let paintHex: UInt32
+    let timeOfDay: TimeOfDay
+    let difficulty: DifficultyLevel
+    let trafficLevel: Int
+    let aggressionLevel: Int
+    let nitroBoosts: Int
+    let policeChase: Bool
+    let wetRoads: Bool
+    let ghostMode: Bool
 }
 
 @MainActor
@@ -44,9 +55,23 @@ final class GameHUDState: ObservableObject {
     @Published var carName = ""
     @Published var carColor = Color.white
     @Published var carRoofColor = Color.black
-    @Published var selectedCarIndex = 0
+    @Published var selectedVehicleIndex = 0
+    @Published var selectedPaintIndex = 0
+    @Published var selectedRouteIndex = 0
+    @Published var paintHex: UInt32 = 0xE63946
+    @Published var garageTab: GarageTab = .vehicle
+    @Published var timeOfDay: TimeOfDay = .day
+    @Published var difficulty: DifficultyLevel = .street
+    @Published var trafficLevel = 40
+    @Published var aggressionLevel = 55
+    @Published var nitroBoosts = 3
+    @Published var policeChase = false
+    @Published var wetRoads = false
+    @Published var ghostMode = false
 
-    /// Lets the SwiftUI overlay drive the game (Start / Retry / car carousel)
+    var paintColor: Color { Color(hex: paintHex) }
+
+    /// Lets the SwiftUI overlay drive the game (Start / Retry / garage UI)
     /// through the same path as touch + keyboard input.
     weak var inputHandler: GameInputHandling?
 
@@ -69,7 +94,18 @@ final class GameHUDState: ObservableObject {
             green: snapshot.carRoofG,
             blue: snapshot.carRoofB
         )
-        selectedCarIndex = snapshot.selectedCarIndex
+        selectedVehicleIndex = snapshot.selectedVehicleIndex
+        selectedPaintIndex = snapshot.selectedPaintIndex
+        selectedRouteIndex = snapshot.selectedRouteIndex
+        paintHex = snapshot.paintHex
+        timeOfDay = snapshot.timeOfDay
+        difficulty = snapshot.difficulty
+        trafficLevel = snapshot.trafficLevel
+        aggressionLevel = snapshot.aggressionLevel
+        nitroBoosts = snapshot.nitroBoosts
+        policeChase = snapshot.policeChase
+        wetRoads = snapshot.wetRoads
+        ghostMode = snapshot.ghostMode
     }
 }
 
@@ -78,53 +114,63 @@ struct GameView: View {
     @State private var showGo = false
 
     var body: some View {
-        GeometryReader { geo in
+        GeometryReader { proxy in
+            let viewport = proxy.size
+            let safeArea = proxy.safeAreaInsets
+
             ZStack {
-                // Sky gradient behind the GPU view: graceful fallback if SceneKit
-                // is briefly empty, plus a little vertical depth.
-                skyBackdrop
+                rootBackdrop
 
-                LowPolyGameView(state: state, viewSize: geo.size)
-                    .ignoresSafeArea()
+                if state.phase != .menu {
+                    LowPolyGameView(state: state)
+                        .frame(width: viewport.width, height: viewport.height)
+                        .ignoresSafeArea(.all)
+                }
 
-                vignette
+                if state.phase == .gameOver {
+                    vignette
+                }
 
-                GameHUDOverlay(state: state)
+                GameHUDOverlay(state: state, viewport: viewport, safeArea: safeArea)
 
                 if showGo {
                     goFlash
                         .transition(.scale(scale: 0.4).combined(with: .opacity))
                 }
             }
+            .frame(width: viewport.width, height: viewport.height)
         }
-        .ignoresSafeArea()
-        .background(Color(red: 0.06, green: 0.09, blue: 0.16))
+        .ignoresSafeArea(.all)
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.82), value: state.phase)
         .onChange(of: state.phase) { _, newPhase in
             if newPhase == .playing { flashGo() }
         }
+        #if os(iOS)
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        #endif
         #if os(macOS)
         .padding(20)
         #endif
     }
 
-    private var skyBackdrop: some View {
-        LinearGradient(
-            colors: [Color(red: 0.42, green: 0.74, blue: 0.95),
-                     Color(red: 0.74, green: 0.89, blue: 0.99)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+    @ViewBuilder
+    private var rootBackdrop: some View {
+        if state.phase == .menu {
+            FreewayFrenzyUI.garageBackground.ignoresSafeArea(.all)
+        } else {
+            // Solid sky — must match PlatformColor.sky / scene.background exactly.
+            GameSky.top.ignoresSafeArea(.all)
+        }
     }
 
     private var vignette: some View {
         RadialGradient(
-            colors: [.clear, .black.opacity(0.3)],
+            colors: [.clear, .black.opacity(state.phase == .menu ? 0.22 : 0.12)],
             center: .center,
-            startRadius: 160,
-            endRadius: 640
+            startRadius: 180,
+            endRadius: 720
         )
         .ignoresSafeArea()
         .blendMode(.multiply)
@@ -153,8 +199,10 @@ private let brandGold = FreewayFrenzyUI.gold
 
 struct GameHUDOverlay: View {
     @ObservedObject var state: GameHUDState
+    let viewport: CGSize
+    let safeArea: EdgeInsets
 
-    private struct LayoutMetrics {
+    struct LayoutMetrics {
         let size: CGSize
         let compact: Bool
         let cramped: Bool
@@ -306,25 +354,20 @@ struct GameHUDOverlay: View {
         #endif
     }
 
-    private var paintStyles: [CarStyle] {
-        CarStyle.catalog
-    }
-
     var body: some View {
-        GeometryReader { geo in
-            let layout = metrics(for: geo.size)
-            ZStack {
-                switch state.phase {
-                case .playing, .crash:
-                    playingHUD(layout)
-                case .menu:
-                    menuCard(layout)
-                case .gameOver:
-                    gameOverCard(layout)
-                }
+        let layout = metrics(for: viewport)
+        ZStack {
+            switch state.phase {
+            case .menu:
+                GarageView(state: state, viewport: viewport, safeArea: safeArea)
+            case .playing, .crash:
+                playingHUD(layout)
+            case .gameOver:
+                gameOverCard(layout)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(width: viewport.width, height: viewport.height)
+        .ignoresSafeArea(.all)
     }
 
     private var controlHint: String {
@@ -505,240 +548,7 @@ struct GameHUDOverlay: View {
             .background(fill, in: Capsule())
             .shadow(color: fill.opacity(0.5), radius: 14, y: 4)
         }
-        .buttonStyle(PressableButtonStyle())
-    }
-
-    // MARK: Menu
-
-    private func menuCard(_ layout: LayoutMetrics) -> some View {
-        let content = VStack(spacing: layout.menuSpacing) {
-            titleStack(layout)
-
-            VStack(spacing: layout.cramped ? 8 : 12) {
-                Text("BLOCK GARAGE")
-                    .font(.system(size: 12, weight: .heavy, design: .rounded))
-                    .tracking(2)
-                    .foregroundStyle(brandGold)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-
-                HStack(spacing: layout.cramped ? 12 : 20) {
-                    carArrow("chevron.left", direction: -1)
-                    carPreview(scale: layout.previewScale)
-                    carArrow("chevron.right", direction: 1)
-                }
-
-                garageMetaRow(layout)
-
-                paintGrid(columns: layout.swatchColumns)
-            }
-
-            pillButton("PLAY", icon: "play.fill", fill: brandMint) {
-                state.inputHandler?.tap()
-            }
-
-            if !layout.cramped {
-                Text(controlHint)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .multilineTextAlignment(.center)
-            }
-
-            if state.highScore > 0 {
-                Label("Best \(state.highScore)", systemImage: "trophy.fill")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(brandGold)
-            }
-        }
-
-        return ScrollView(.vertical, showsIndicators: false) {
-            content
-                .padding(layout.cardInnerPadding)
-                .frame(maxWidth: layout.cardMaxWidth)
-                .background { cardBackground() }
-                .padding(layout.cardOuterPadding)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .safeAreaPadding(.top, layout.topPadding)
-        .transition(.scale(scale: 0.9).combined(with: .opacity))
-    }
-
-    private func paintGrid(columns: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 58, maximum: 86), spacing: 8), count: columns), spacing: 8) {
-            ForEach(Array(paintStyles.enumerated()), id: \.offset) { index, style in
-                Button {
-                    state.inputHandler?.selectCar(index)
-                } label: {
-                    paintTile(style: style, isSelected: index == state.selectedCarIndex)
-                }
-                .buttonStyle(PressableButtonStyle())
-            }
-        }
-        .padding(8)
-        .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private func garageMetaRow(_ layout: LayoutMetrics) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                garageCarName
-                garageChip("PAINT", foreground: .black.opacity(0.75), background: brandGold)
-                garageChip("CAR \(selectedCarOrdinal)/\(paintStyles.count)", foreground: .white.opacity(0.68), background: .white.opacity(0.08))
-            }
-
-            VStack(spacing: 6) {
-                garageCarName
-                HStack(spacing: 8) {
-                    garageChip("PAINT", foreground: .black.opacity(0.75), background: brandGold)
-                    garageChip("CAR \(selectedCarOrdinal)/\(paintStyles.count)", foreground: .white.opacity(0.68), background: .white.opacity(0.08))
-                }
-            }
-            .frame(maxWidth: layout.cardMaxWidth - layout.cardInnerPadding * 2)
-        }
-    }
-
-    private var selectedCarOrdinal: Int {
-        min(max(state.selectedCarIndex + 1, 1), paintStyles.count)
-    }
-
-    private var garageCarName: some View {
-        Text(state.carName.uppercased())
-            .font(.system(size: 18, weight: .black, design: .rounded))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .contentTransition(.numericText())
-    }
-
-    private func garageChip(_ title: String, foreground: Color, background: Color) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .heavy, design: .rounded))
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(background, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-    }
-
-    private func paintTile(style: CarStyle, isSelected: Bool) -> some View {
-        let body = Color(hex: style.bodyHex)
-        let roof = Color(hex: style.roofHex)
-        return VStack(spacing: 5) {
-            ZStack(alignment: .topTrailing) {
-                FreewayFrenzyUI.PaintSwatch(color: body, isSelected: isSelected)
-                    .frame(maxWidth: .infinity)
-                Rectangle()
-                    .fill(roof)
-                    .frame(width: 16, height: 9)
-                    .overlay(Rectangle().stroke(.black.opacity(0.45), lineWidth: 1))
-                    .offset(x: -4, y: 4)
-            }
-
-            Text(style.name.uppercased())
-                .font(.system(size: 8.5, weight: .black, design: .rounded))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.58))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 6)
-        .frame(minHeight: 58)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isSelected ? body.opacity(0.22) : .white.opacity(0.045))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(isSelected ? .white.opacity(0.85) : .white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
-        )
-    }
-
-    private func carArrow(_ icon: String, direction: Int) -> some View {
-        Button {
-            state.inputHandler?.swipeLane(direction)
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .heavy))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-        }
-        .buttonStyle(FreewayFrenzyUI.BlockButtonStyle(fill: FreewayFrenzyUI.panelLight))
-    }
-
-    /// A tiny blocky car built from SwiftUI shapes, tinted with the chosen colour.
-    private func carPreview(scale: CGFloat) -> some View {
-        ZStack {
-            Ellipse()
-                .fill(.black.opacity(0.28))
-                .frame(width: 128, height: 20)
-                .offset(y: 42)
-
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(state.carColor)
-                .frame(width: 126, height: 58)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(.black.opacity(0.23))
-                        .frame(height: 16)
-                }
-                .shadow(color: state.carColor.opacity(0.65), radius: 12)
-
-            Rectangle()
-                .fill(state.carRoofColor)
-                .frame(width: 84, height: 34)
-                .offset(y: -21)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(.white.opacity(0.16))
-                        .frame(height: 7)
-                }
-
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(Color(red: 0.55, green: 0.78, blue: 0.92).opacity(0.78))
-                    .frame(width: 28, height: 16)
-                Rectangle()
-                    .fill(Color(red: 0.18, green: 0.33, blue: 0.46).opacity(0.9))
-                    .frame(width: 22, height: 16)
-            }
-            .offset(y: -21)
-
-            Rectangle()
-                .fill(.black.opacity(0.38))
-                .frame(width: 132, height: 8)
-                .offset(y: 9)
-
-            HStack(spacing: 48) {
-                Rectangle().fill(.yellow).frame(width: 10, height: 8)
-                Rectangle().fill(.yellow).frame(width: 10, height: 8)
-            }
-            .offset(y: 21)
-
-            HStack(spacing: 66) {
-                Circle()
-                    .fill(.black)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8))
-                Circle()
-                    .fill(.black)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8))
-            }
-            .offset(y: 32)
-        }
-        .frame(width: 138, height: 86)
-        .scaleEffect(scale)
-        .frame(width: 138 * scale, height: 86 * scale)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 2)
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: state.carColor)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: state.carRoofColor)
+        .buttonStyle(FreewayFrenzyUI.PressableButtonStyle())
     }
 
     // MARK: Game Over
@@ -777,6 +587,9 @@ struct GameHUDOverlay: View {
         .frame(maxWidth: layout.cardMaxWidth)
         .background { cardBackground() }
         .padding(layout.cardOuterPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .safeAreaPadding(.top, layout.topPadding)
+        .safeAreaPadding(.bottom, layout.bottomPadding)
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 
@@ -805,19 +618,8 @@ struct GameHUDOverlay: View {
     }
 }
 
-/// Springy press feedback for the menu / game-over buttons.
-private struct PressableButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
 struct LowPolyGameView: PlatformViewRepresentable {
     let state: GameHUDState
-    let viewSize: CGSize
 
     #if os(macOS)
     func makeNSView(context: Context) -> GameSCNView {
@@ -825,15 +627,24 @@ struct LowPolyGameView: PlatformViewRepresentable {
     }
 
     func updateNSView(_ view: GameSCNView, context: Context) {
-        context.coordinator.setAspect(size: viewSize)
+        context.coordinator.ensureLayoutBridge().updateViewLayout(view)
+        applyMenuVisibility(to: view, isMenu: state.phase == .menu)
     }
     #else
+    static func sizeThatFits(_ proposal: ProposedViewSize, uiView: GameSCNView, context: Context) -> CGSize? {
+        CGSize(
+            width: proposal.width ?? UIScreen.main.bounds.width,
+            height: proposal.height ?? UIScreen.main.bounds.height
+        )
+    }
+
     func makeUIView(context: Context) -> GameSCNView {
         makeView(context: context)
     }
 
     func updateUIView(_ view: GameSCNView, context: Context) {
-        context.coordinator.setAspect(size: viewSize)
+        context.coordinator.ensureLayoutBridge().updateViewLayout(view)
+        applyMenuVisibility(to: view, isMenu: state.phase == .menu)
     }
     #endif
 
@@ -842,17 +653,58 @@ struct LowPolyGameView: PlatformViewRepresentable {
     }
 
     private func makeView(context: Context) -> GameSCNView {
+        let coordinator = context.coordinator
         let view = GameSCNView(frame: .zero)
-        view.backgroundColor = PlatformColor(red: 0.45, green: 0.72, blue: 0.88, alpha: 1)
+        view.backgroundColor = PlatformColor.sky
+        #if os(iOS)
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        #else
+        view.autoresizingMask = [.width, .height]
+        #endif
         view.antialiasingMode = .multisampling4X
         view.preferredFramesPerSecond = 60
-        view.rendersContinuously = true
+        view.rendersContinuously = false
         view.allowsCameraControl = false
-        view.scene = context.coordinator.scene
-        view.delegate = context.coordinator
-        view.gameInputHandler = context.coordinator
-        context.coordinator.attach(to: view)
+        view.gameInputHandler = coordinator
+        let bridge = coordinator.ensureLayoutBridge()
+        view.layoutDelegate = bridge
+        bridge.prepareView(view)
+        applyMenuVisibility(to: view, isMenu: state.phase == .menu)
         return view
+    }
+
+    private func applyMenuVisibility(to view: GameSCNView, isMenu: Bool) {
+        #if os(iOS)
+        view.isHidden = false
+        view.alpha = isMenu ? 0 : 1
+        view.isOpaque = !isMenu
+        view.backgroundColor = isMenu ? .clear : PlatformColor.sky
+        view.layer.isOpaque = !isMenu
+        view.rendersContinuously = !isMenu
+        #else
+        view.isHidden = isMenu
+        #endif
+    }
+}
+
+@MainActor
+final class GameSceneLayoutBridge: GameSCNViewLayoutDelegate {
+    private weak var coordinator: LowPolyGameCoordinator?
+
+    func attach(coordinator: LowPolyGameCoordinator) {
+        self.coordinator = coordinator
+    }
+
+    func prepareView(_ view: GameSCNView) {
+        coordinator?.prepareView(view)
+    }
+
+    func updateViewLayout(_ view: GameSCNView) {
+        coordinator?.updateViewLayout(view)
+    }
+
+    func viewDidLayout(_ size: CGSize) {
+        coordinator?.viewDidLayout(size)
     }
 }
 
@@ -864,7 +716,17 @@ protocol GameInputHandling: AnyObject {
     func touchDown()
     func tap()
     func swipeLane(_ direction: Int)
-    func selectCar(_ index: Int)
+    func selectVehicle(_ index: Int)
+    func selectPaint(_ index: Int)
+    func selectRoute(_ index: Int)
+    func setDifficulty(_ level: DifficultyLevel)
+    func setTimeOfDay(_ tod: TimeOfDay)
+    func setTraffic(_ value: Int)
+    func setAggression(_ value: Int)
+    func setNitroBoosts(_ value: Int)
+    func setPoliceChase(_ value: Bool)
+    func setWetRoads(_ value: Bool)
+    func setGhostMode(_ value: Bool)
     func dragThrottle(_ deltaY: CGFloat)
     func touchUp()
 }
@@ -896,6 +758,7 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     private var lastSteerMagnitude: CGFloat = 0
     private var lastHUDSnapshot: HUDSnapshot?
     private var cachedAspect: CGFloat = 0.46
+    private var cachedViewHeight: CGFloat = 852
     private var simulationTime: TimeInterval = 0
 
     private let world = SCNNode()
@@ -916,8 +779,8 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     private var laneDashNodes: [SCNNode] = []
     private var sceneryNodes: [SCNNode] = []
     private var debrisNodes: [SCNNode] = []
-    private weak var view: SCNView?
-    private var renderedPlayerCarIndex: Int?
+    private weak var view: GameSCNView?
+    private var renderedPlayerSignature: String?
 
     private struct CameraProfile {
         let height: CGFloat
@@ -932,15 +795,30 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
 
     private var cameraProfile: CameraProfile {
         #if os(macOS)
-        return CameraProfile(height: 8.6, back: 14.6, pitch: -0.39, fov: 52, fogStart: 64, fogEnd: 126, speedLift: 0.48, speedBack: 1.05)
+        return CameraProfile(height: 9.4, back: 17.2, pitch: -0.28, fov: 54, fogStart: 72, fogEnd: 138, speedLift: 0.52, speedBack: 1.15)
         #else
         if cachedAspect > 0.9 {
-            return CameraProfile(height: 6.4, back: 9.6, pitch: -0.57, fov: 45, fogStart: 38, fogEnd: 76, speedLift: 0.28, speedBack: 0.45)
-        } else {
-            return CameraProfile(height: 5.25, back: 7.15, pitch: -0.72, fov: 39, fogStart: 28, fogEnd: 58, speedLift: 0.18, speedBack: 0.18)
+            return CameraProfile(height: 5.4, back: 7.6, pitch: -0.80, fov: 44, fogStart: 32, fogEnd: 72, speedLift: 0.22, speedBack: 0.32)
         }
+        if cachedViewHeight >= 850 {
+            return CameraProfile(height: 3.95, back: 5.15, pitch: -0.90, fov: resolvedFOV(base: 52), fogStart: 22, fogEnd: 48, speedLift: 0.14, speedBack: 0.10)
+        }
+        if cachedViewHeight >= 760 {
+            return CameraProfile(height: 4.25, back: 5.55, pitch: -0.88, fov: resolvedFOV(base: 48), fogStart: 24, fogEnd: 52, speedLift: 0.14, speedBack: 0.12)
+        }
+        return CameraProfile(height: 4.55, back: 5.95, pitch: -0.86, fov: resolvedFOV(base: 44), fogStart: 26, fogEnd: 56, speedLift: 0.16, speedBack: 0.14)
         #endif
     }
+
+    /// Boost horizontal FOV on tall portrait screens so the road plane fills top/bottom.
+    private func resolvedFOV(base: CGFloat) -> CGFloat {
+        guard cachedAspect > 0.01, cachedAspect < 0.95 else { return base }
+        let tallness = max(0, min(1, (0.58 - cachedAspect) / 0.22))
+        return base + tallness * 16
+    }
+
+    private var sceneIsReady = false
+    nonisolated(unsafe) private var layoutBridgeStorage: GameSceneLayoutBridge?
 
     init(state: GameHUDState) {
         self.hudState = state
@@ -948,28 +826,67 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     }
 
     @MainActor
-    func attach(to view: SCNView) {
-        guard self.view == nil else { return }
-        self.view = view
-        hudState.inputHandler = self
-        refreshAspect(from: view)
-        buildScene()
-        view.pointOfView = cameraNode
+    func ensureLayoutBridge() -> GameSceneLayoutBridge {
+        if let layoutBridgeStorage {
+            return layoutBridgeStorage
+        }
+        let bridge = GameSceneLayoutBridge()
+        bridge.attach(coordinator: self)
+        layoutBridgeStorage = bridge
+        return bridge
     }
 
     @MainActor
-    func refreshAspect(from view: SCNView) {
-        guard view.bounds.height > 0 else { return }
-        setAspect(size: view.bounds.size)
+    fileprivate func prepareView(_ view: GameSCNView) {
+        guard self.view == nil else { return }
+        self.view = view
+        hudState.inputHandler = self
     }
 
-    func setAspect(size: CGSize) {
-        guard size.height > 0 else { return }
-        cachedAspect = size.width / size.height
+    @MainActor
+    fileprivate func updateViewLayout(_ view: GameSCNView) {
+        if self.view == nil {
+            prepareView(view)
+        }
+        let layoutSize = view.bounds.size
+        guard layoutSize.width > 1, layoutSize.height > 1 else { return }
+        setAspect(size: layoutSize)
+        activateSceneIfNeeded(in: view, size: layoutSize)
+    }
+
+    @MainActor
+    private func activateSceneIfNeeded(in view: GameSCNView, size: CGSize) {
+        guard !sceneIsReady, size.width > 1, size.height > 1 else { return }
+        if view.scene == nil {
+            buildScene()
+            view.scene = scene
+            view.delegate = self
+            view.pointOfView = cameraNode
+        }
+        view.rendersContinuously = true
+        sceneIsReady = true
         applyCameraProfile(animated: false)
     }
 
-    func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+    @MainActor
+    fileprivate func viewDidLayout(_ size: CGSize) {
+        guard let view else { return }
+        guard size.width > 1, size.height > 1 else { return }
+        setAspect(size: size)
+        activateSceneIfNeeded(in: view, size: size)
+    }
+
+    func setAspect(size: CGSize) {
+        guard size.width > 1, size.height > 1 else { return }
+        cachedAspect = size.width / size.height
+        cachedViewHeight = size.height
+        if sceneIsReady {
+            applyCameraProfile(animated: false)
+        }
+    }
+
+    nonisolated func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        guard sceneIsReady else { return }
         let delta = lastTime == 0 ? 0 : time - lastTime
         lastTime = time
         simulationTime = time
@@ -1015,24 +932,73 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
 
     func swipeLane(_ direction: Int) {
         let previousLane = model.targetLane
-        let previousCar = model.selectedCarIndex
         model.nudgeLane(direction, now: simulationTime > 0 ? simulationTime : CACurrentMediaTime())
         if model.phase == .playing, model.targetLane != previousLane {
             sound.playLane()
             #if os(iOS)
             Task { @MainActor in GameHaptics.laneChange() }
             #endif
-        } else if model.phase == .menu, model.selectedCarIndex != previousCar {
-            sound.playTap()
         }
     }
 
-    func selectCar(_ index: Int) {
-        let previousCar = model.selectedCarIndex
-        model.selectCar(index)
-        if model.selectedCarIndex != previousCar {
-            sound.playTap()
-        }
+    func selectVehicle(_ index: Int) {
+        model.selectVehicle(index)
+        sound.playTap()
+        rebuildPlayerIfNeeded()
+        flushGarageHUD()
+    }
+
+    func selectPaint(_ index: Int) {
+        model.selectPaint(index)
+        sound.playTap()
+        rebuildPlayerIfNeeded()
+        flushGarageHUD()
+    }
+
+    func selectRoute(_ index: Int) {
+        model.selectRoute(index)
+        sound.playTap()
+        flushGarageHUD()
+    }
+
+    func setDifficulty(_ level: DifficultyLevel) {
+        model.setDifficulty(level)
+        flushGarageHUD()
+    }
+
+    func setTimeOfDay(_ tod: TimeOfDay) {
+        model.setTimeOfDay(tod)
+        flushGarageHUD()
+    }
+
+    func setTraffic(_ value: Int) {
+        model.setTraffic(value)
+        flushGarageHUD()
+    }
+
+    func setAggression(_ value: Int) {
+        model.setAggression(value)
+        flushGarageHUD()
+    }
+
+    func setNitroBoosts(_ value: Int) {
+        model.setNitroBoosts(value)
+        flushGarageHUD()
+    }
+
+    func setPoliceChase(_ value: Bool) {
+        model.setPoliceChase(value)
+        flushGarageHUD()
+    }
+
+    func setWetRoads(_ value: Bool) {
+        model.setWetRoads(value)
+        flushGarageHUD()
+    }
+
+    func setGhostMode(_ value: Bool) {
+        model.setGhostMode(value)
+        flushGarageHUD()
     }
 
     func dragThrottle(_ deltaY: CGFloat) {
@@ -1151,8 +1117,8 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         cam.bloomThreshold = 0.78
         cam.bloomBlurRadius = 8
         cam.wantsExposureAdaptation = false
-        cam.vignettingIntensity = 0.18
-        cam.vignettingPower = 1.1
+        cam.vignettingIntensity = 0.04
+        cam.vignettingPower = 0.8
         cameraNode.camera = cam
         applyCameraProfile(animated: false)
         scene.rootNode.addChildNode(cameraNode)
@@ -1213,14 +1179,14 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             roadRoot.addChildNode(rail)
         }
 
-        let grass = slab(width: 160, height: 0.12, length: 360, color: .grass, chamfer: 0)
-        grass.position = SCNVector3(0, -0.22, -120)
+        let grass = slab(width: 220, height: 0.12, length: 420, color: .grass, chamfer: 0)
+        grass.position = SCNVector3(0, -0.22, -140)
         grass.name = "grass"
         world.addChildNode(grass)
         grass.renderingOrder = -10
 
-        let grassFront = slab(width: 160, height: 0.12, length: 90, color: .grass, chamfer: 0)
-        grassFront.position = SCNVector3(0, -0.22, 34)
+        let grassFront = slab(width: 220, height: 0.12, length: 120, color: .grass, chamfer: 0)
+        grassFront.position = SCNVector3(0, -0.22, 42)
         world.addChildNode(grassFront)
         grassFront.renderingOrder = -10
     }
@@ -1243,16 +1209,30 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     private func buildPlayer() {
         let style = model.selectedCarStyle
         playerNode.childNodes.forEach { $0.removeFromParentNode() }
-        playerNode.addChildNode(buildCar(body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true))
+        playerNode.addChildNode(buildCar(type: model.selectedBodyType, body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true))
         playerNode.scale = SCNVector3(Self.playerScale, Self.playerScale, Self.playerScale)
         playerNode.position = SCNVector3(0, 0.42, Self.playerZ)
         playerNode.eulerAngles.y = 0
-        renderedPlayerCarIndex = model.selectedCarIndex
+        renderedPlayerSignature = playerSignature
+    }
+
+    private var playerSignature: String {
+        "\(model.selectedVehicleIndex)-\(model.selectedPaintIndex)-\(model.selectedBodyType.rawValue)"
+    }
+
+    private func rebuildPlayerIfNeeded() {
+        guard sceneIsReady else { return }
+        if renderedPlayerSignature != playerSignature || playerNode.childNodes.isEmpty {
+            buildPlayer()
+        } else {
+            let style = model.selectedCarStyle
+            applyCarColors(playerNode, body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true)
+        }
     }
 
     private func buildObstacles() {
         for _ in 0..<model.maxObstacles {
-            let node = buildCar(body: .hex(model.obstacleColorHex(for: Int.random(in: 0..<6))), roof: .charcoal, isPlayer: false)
+            let node = buildCar(type: [.sedan, .sports, .suv].randomElement() ?? .sedan, body: .hex(model.obstacleColorHex(for: Int.random(in: 0..<6))), roof: .hex(GarageCatalog.darken(model.obstacleColorHex(for: 0), factor: 0.72)), isPlayer: false)
             node.isHidden = true
             obstacleRoot.addChildNode(node)
             obstacleNodes.append(node)
@@ -1298,13 +1278,7 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     }
 
     private func updatePlayer(time: TimeInterval) {
-        let style = model.selectedCarStyle
-        if renderedPlayerCarIndex != model.selectedCarIndex || playerNode.childNodes.isEmpty {
-            buildPlayer()
-        } else if let car = playerNode.childNodes.first {
-            applyCarColors(car, body: .hex(style.bodyHex), roof: .hex(style.roofHex), isPlayer: true)
-        }
-
+        rebuildPlayerIfNeeded()
         let laneProgress = model.phase == .menu ? 0 : (model.carX - model.laneCenter(2)) / model.laneWidth
         let targetX = laneProgress * Self.laneSpacing
         let currentX = CGFloat(playerNode.position.x)
@@ -1379,8 +1353,8 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         let shake = model.phase == .crash ? model.cameraShake / 40 : .zero
         let speedT = min(model.speed / 320, 1.4)
         let profile = cameraProfile
-        let menuLift: CGFloat = model.phase == .menu ? -0.42 : 0
-        let menuBack: CGFloat = model.phase == .menu ? -0.85 : 0
+        let menuLift: CGFloat = model.phase == .menu ? -0.18 : 0
+        let menuBack: CGFloat = model.phase == .menu ? -0.35 : 0
         let desired = SCNVector3(
             SCNFloat(shake.dx),
             SCNFloat(profile.height + speedT * profile.speedLift + menuLift),
@@ -1395,9 +1369,10 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         cameraNode.position.z += (desired.z - cameraNode.position.z) * 0.14
     }
 
-    private func updateHUD() {
+    private func makeHUDSnapshot() -> HUDSnapshot {
         let style = model.selectedCarStyle
-        let snapshot = HUDSnapshot(
+        let settings = model.garageSettings
+        return HUDSnapshot(
             score: model.score,
             highScore: model.highScore,
             coins: model.coinsCollected,
@@ -1412,15 +1387,40 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             carRoofR: Double((style.roofHex >> 16) & 0xFF) / 255.0,
             carRoofG: Double((style.roofHex >> 8) & 0xFF) / 255.0,
             carRoofB: Double(style.roofHex & 0xFF) / 255.0,
-            selectedCarIndex: model.selectedCarIndex
+            selectedVehicleIndex: model.selectedVehicleIndex,
+            selectedPaintIndex: model.selectedPaintIndex,
+            selectedRouteIndex: model.selectedRouteIndex,
+            paintHex: model.bodyHex,
+            timeOfDay: settings.timeOfDay,
+            difficulty: settings.difficulty,
+            trafficLevel: settings.traffic,
+            aggressionLevel: settings.aggression,
+            nitroBoosts: settings.nitroBoosts,
+            policeChase: settings.policeChase,
+            wetRoads: settings.wetRoads,
+            ghostMode: settings.ghostMode
         )
-        guard snapshot != lastHUDSnapshot else { return }
-        lastHUDSnapshot = snapshot
+    }
 
+    private func publishHUD(_ snapshot: HUDSnapshot) {
         let target = hudState
         Task { @MainActor in
             target.apply(snapshot)
         }
+    }
+
+    private func updateHUD() {
+        let snapshot = makeHUDSnapshot()
+        guard snapshot != lastHUDSnapshot else { return }
+        lastHUDSnapshot = snapshot
+        publishHUD(snapshot)
+    }
+
+    private func flushGarageHUD() {
+        lastHUDSnapshot = nil
+        let snapshot = makeHUDSnapshot()
+        lastHUDSnapshot = snapshot
+        publishHUD(snapshot)
     }
 
     private func laneX(_ lane: Int) -> CGFloat {
@@ -1448,15 +1448,36 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     }
 }
 
+@MainActor
+protocol GameSCNViewLayoutDelegate: AnyObject {
+    func viewDidLayout(_ size: CGSize)
+}
+
 #if os(macOS)
 final class GameSCNView: SCNView {
     weak var gameInputHandler: GameInputHandling?
+    weak var layoutDelegate: GameSCNViewLayoutDelegate?
 
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+        if bounds.width > 1, bounds.height > 1 {
+            layoutDelegate?.viewDidLayout(bounds.size)
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        guard bounds.width > 1, bounds.height > 1 else { return }
+        layoutDelegate?.viewDidLayout(bounds.size)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard newSize.width > 1, newSize.height > 1 else { return }
+        layoutDelegate?.viewDidLayout(CGSize(width: newSize.width, height: newSize.height))
     }
 
     override func keyDown(with event: NSEvent) {
@@ -1487,11 +1508,18 @@ final class GameSCNView: SCNView {
 #else
 final class GameSCNView: SCNView {
     weak var gameInputHandler: GameInputHandling?
+    weak var layoutDelegate: GameSCNViewLayoutDelegate?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 1, bounds.height > 1 else { return }
+        layoutDelegate?.viewDidLayout(bounds.size)
+    }
 
     private var touchStart = CGPoint.zero
     private var laneAnchorX: CGFloat = 0
     private var travelled: CGFloat = 0
-    private let laneThreshold: CGFloat = 22
+    private let laneThreshold: CGFloat = 16
     private let tapTolerance: CGFloat = 12
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -1553,99 +1581,104 @@ private func material(_ color: PlatformColor) -> SCNMaterial {
     return mat
 }
 
-private func buildCar(body: PlatformColor, roof: PlatformColor, isPlayer: Bool) -> SCNNode {
-    // Chunky, almost voxel proportions: a fat lower body, a stubby raised cabin,
-    // thick wheels and bold lights. Hard chamfers keep the blocky read.
+private func buildCar(type: CarBodyType, body: PlatformColor, roof: PlatformColor, isPlayer: Bool) -> SCNNode {
     let root = SCNNode()
+    let frontZ: CGFloat = isPlayer ? -1 : 1
+    let roofTint = body.blended(with: roof, amount: 0.22)
 
-    let base = slab(width: 1.34, height: 0.48, length: 1.96, color: body, chamfer: 0.04)
-    base.name = "body"
-    base.position.y = 0.25
-    root.addChildNode(base)
-
-    let hood = slab(width: 1.18, height: 0.12, length: 0.62, color: body.blended(with: .white, amount: 0.10), chamfer: 0.025)
-    hood.name = "body"
-    hood.position = SCNVector3(0, 0.55, isPlayer ? -0.52 : 0.52)
-    root.addChildNode(hood)
-
-    // A dark trim band around the midline (bumper). Fixed colour so it stays
-    // correct when the car is recoloured (only "body"/"roof" nodes recolour).
-    let trim = slab(width: 1.4, height: 0.12, length: 2.02, color: .charcoal, chamfer: 0.035)
-    trim.position.y = 0.5
-    root.addChildNode(trim)
-
-    let frontBumper = slab(width: 1.18, height: 0.18, length: 0.16, color: .bumper, chamfer: 0.025)
-    frontBumper.position = SCNVector3(0, 0.27, isPlayer ? -1.04 : 1.04)
-    root.addChildNode(frontBumper)
-
-    let rearBumper = slab(width: 1.12, height: 0.16, length: 0.14, color: .bumper, chamfer: 0.025)
-    rearBumper.position = SCNVector3(0, 0.27, isPlayer ? 1.04 : -1.04)
-    root.addChildNode(rearBumper)
-
-    let cabin = slab(width: 0.92, height: 0.58, length: 0.92, color: roof, chamfer: 0.04)
-    cabin.name = "roof"
-    cabin.position = SCNVector3(0, 0.86, isPlayer ? -0.1 : 0.1)
-    root.addChildNode(cabin)
-
-    // Windshield strip for a bit of character.
-    let glass = slab(width: 0.8, height: 0.34, length: 0.1, color: .glass, chamfer: 0.02)
-    glass.position = SCNVector3(0, 0.86, isPlayer ? -0.6 : 0.6)
-    root.addChildNode(glass)
-
-    for x in [-0.49, 0.49] {
-        let sideGlass = slab(width: 0.08, height: 0.28, length: 0.52, color: .glassDark, chamfer: 0.01)
-        sideGlass.position = SCNVector3(x, 0.86, 0)
-        root.addChildNode(sideGlass)
+    func wheel(x: CGFloat, z: CGFloat) {
+        let w = slab(width: 0.22, height: 0.28, length: 0.22, color: .tire, chamfer: 0)
+        w.position = SCNVector3(x, 0.14, z)
+        root.addChildNode(w)
     }
 
-    let grille = slab(width: 0.62, height: 0.16, length: 0.05, color: .grille, chamfer: 0.01)
-    grille.position = SCNVector3(0, 0.38, isPlayer ? -1.08 : 1.08)
-    root.addChildNode(grille)
+    func headlight(x: CGFloat, z: CGFloat, name: String) {
+        let light = slab(width: 0.18, height: 0.10, length: 0.05, color: .headlight, chamfer: 0)
+        light.name = name
+        light.geometry?.firstMaterial?.emission.contents = PlatformColor.headlight
+        light.geometry?.firstMaterial?.emission.intensity = isPlayer ? 0.45 : 0.25
+        light.position = SCNVector3(x, 0.36, z)
+        root.addChildNode(light)
+    }
 
-    let spoiler = slab(width: 1.0, height: 0.08, length: 0.16, color: roof, chamfer: 0.02)
-    spoiler.name = "roof"
-    spoiler.position = SCNVector3(0, 0.78, isPlayer ? 0.96 : -0.96)
-    root.addChildNode(spoiler)
+    switch type {
+    case .sedan:
+        let chassis = slab(width: 1.28, height: 0.44, length: 1.88, color: body, chamfer: 0)
+        chassis.name = "body"
+        chassis.position.y = 0.24
+        root.addChildNode(chassis)
+        let cabin = slab(width: 0.86, height: 0.52, length: 0.86, color: roofTint, chamfer: 0)
+        cabin.name = "roof"
+        cabin.position = SCNVector3(0, 0.78, frontZ * 0.08)
+        root.addChildNode(cabin)
+        let glass = slab(width: 0.72, height: 0.28, length: 0.08, color: .glass, chamfer: 0)
+        glass.position = SCNVector3(0, 0.78, frontZ * 0.52)
+        root.addChildNode(glass)
+        for x in [-0.52, 0.52] { for z in [-0.58, 0.58] { wheel(x: x, z: z) } }
+        headlight(x: -0.34, z: frontZ * 0.94, name: "headlightL")
+        headlight(x: 0.34, z: frontZ * 0.94, name: "headlightR")
 
-    for x in [-0.56, 0.56] {
-        for z in [-0.62, 0.62] {
-            let wheel = SCNCylinder(radius: 0.28, height: 0.26)
-            wheel.firstMaterial = material(.tire)
-            let node = SCNNode(geometry: wheel)
-            node.name = "wheel"
-            node.eulerAngles.z = SCNFloat.pi / 2
-            node.position = SCNVector3(x, 0.19, z)
-            root.addChildNode(node)
+    case .sports:
+        let chassis = slab(width: 1.30, height: 0.36, length: 1.96, color: body, chamfer: 0)
+        chassis.name = "body"
+        chassis.position.y = 0.22
+        root.addChildNode(chassis)
+        let cabin = slab(width: 0.74, height: 0.38, length: 0.72, color: roofTint, chamfer: 0)
+        cabin.name = "roof"
+        cabin.position = SCNVector3(0, 0.58, frontZ * 0.12)
+        root.addChildNode(cabin)
+        let spoiler = slab(width: 0.96, height: 0.06, length: 0.12, color: body.shaded(0.75), chamfer: 0)
+        spoiler.position = SCNVector3(0, 0.52, -frontZ * 0.92)
+        root.addChildNode(spoiler)
+        for x in [-0.54, 0.54] { for z in [-0.64, 0.64] { wheel(x: x, z: z) } }
+        headlight(x: -0.36, z: frontZ * 0.98, name: "headlightL")
+        headlight(x: 0.36, z: frontZ * 0.98, name: "headlightR")
 
-            let hub = SCNCylinder(radius: 0.13, height: 0.28)
-            hub.firstMaterial = material(.hubcap)
-            let hubNode = SCNNode(geometry: hub)
-            hubNode.eulerAngles.z = SCNFloat.pi / 2
-            hubNode.position = node.position
-            root.addChildNode(hubNode)
+    case .suv:
+        let chassis = slab(width: 1.36, height: 0.50, length: 1.94, color: body, chamfer: 0)
+        chassis.name = "body"
+        chassis.position.y = 0.26
+        root.addChildNode(chassis)
+        let cabin = slab(width: 1.04, height: 0.66, length: 1.24, color: roofTint, chamfer: 0)
+        cabin.name = "roof"
+        cabin.position = SCNVector3(0, 0.88, frontZ * 0.04)
+        root.addChildNode(cabin)
+        let glass = slab(width: 0.88, height: 0.36, length: 0.10, color: .glass, chamfer: 0)
+        glass.position = SCNVector3(0, 0.88, frontZ * 0.66)
+        root.addChildNode(glass)
+        for x in [-0.56, 0.56] { for z in [-0.62, 0.62] { wheel(x: x, z: z) } }
+        headlight(x: -0.38, z: frontZ * 0.96, name: "headlightL")
+        headlight(x: 0.38, z: frontZ * 0.96, name: "headlightR")
+
+    case .truck:
+        let chassis = slab(width: 1.38, height: 0.46, length: 2.24, color: body, chamfer: 0)
+        chassis.name = "body"
+        chassis.position = SCNVector3(0, 0.26, frontZ * 0.12)
+        root.addChildNode(chassis)
+        let bed = slab(width: 0.92, height: 0.28, length: 1.08, color: body.shaded(0.82), chamfer: 0)
+        bed.name = "body"
+        bed.position = SCNVector3(0, 0.58, -frontZ * 0.42)
+        root.addChildNode(bed)
+        let cab = slab(width: 0.78, height: 0.62, length: 0.78, color: roofTint, chamfer: 0)
+        cab.name = "roof"
+        cab.position = SCNVector3(0, 0.82, frontZ * 0.72)
+        root.addChildNode(cab)
+        for (x, z) in [(-0.58, -0.72), (0.58, -0.72), (-0.58, 0.72), (0.58, 0.72), (-0.58, -0.08), (0.58, -0.08)] {
+            wheel(x: x, z: z)
         }
+        headlight(x: -0.34, z: frontZ * 1.08, name: "headlightL")
+        headlight(x: 0.34, z: frontZ * 1.08, name: "headlightR")
     }
 
-    let lightColor: PlatformColor = isPlayer ? .headlight : .tailLight
-    let names = isPlayer ? ["headlightL", "headlightR"] : ["taillightL", "taillightR"]
-    for (i, x) in [-0.36, 0.36].enumerated() {
-        let light = slab(width: 0.24, height: 0.12, length: 0.06, color: lightColor, chamfer: 0.01)
-        light.name = names[i]
-        light.geometry?.firstMaterial?.emission.contents = lightColor
-        light.geometry?.firstMaterial?.emission.intensity = isPlayer ? 0.4 : 0.8
-        light.position = SCNVector3(x, 0.4, isPlayer ? -0.98 : 0.98)
-        root.addChildNode(light)
-    }
-
-    let otherLightColor: PlatformColor = isPlayer ? .tailLight : .headlight
-    let otherNames = isPlayer ? ["taillightL", "taillightR"] : ["headlightL", "headlightR"]
-    for (i, x) in [-0.36, 0.36].enumerated() {
-        let light = slab(width: 0.24, height: 0.12, length: 0.06, color: otherLightColor, chamfer: 0.01)
-        light.name = otherNames[i]
-        light.geometry?.firstMaterial?.emission.contents = otherLightColor
-        light.geometry?.firstMaterial?.emission.intensity = isPlayer ? 0.8 : 0.4
-        light.position = SCNVector3(x, 0.4, isPlayer ? 0.98 : -0.98)
-        root.addChildNode(light)
+    if isPlayer {
+        for (i, x) in [-0.34, 0.34].enumerated() {
+            let tail = slab(width: 0.18, height: 0.10, length: 0.05, color: .tailLight, chamfer: 0)
+            tail.name = i == 0 ? "taillightL" : "taillightR"
+            tail.geometry?.firstMaterial?.emission.contents = PlatformColor.tailLight
+            tail.geometry?.firstMaterial?.emission.intensity = 0.75
+            tail.position = SCNVector3(x, 0.36, -frontZ * 0.94)
+            root.addChildNode(tail)
+        }
     }
 
     return root
@@ -1780,15 +1813,6 @@ private extension CGVector {
     }
 }
 
-private extension Color {
-    init(hex: UInt32) {
-        self.init(
-            red: Double((hex >> 16) & 0xFF) / 255.0,
-            green: Double((hex >> 8) & 0xFF) / 255.0,
-            blue: Double(hex & 0xFF) / 255.0
-        )
-    }
-}
 
 private extension PlatformColor {
     static var sky: PlatformColor { PlatformColor(red: 0.42, green: 0.74, blue: 0.95, alpha: 1) }
@@ -1821,6 +1845,10 @@ private extension PlatformColor {
             blue: CGFloat(hex & 0xFF) / 255,
             alpha: 1
         )
+    }
+
+    func shaded(_ factor: CGFloat) -> PlatformColor {
+        blended(with: .black, amount: 1 - factor)
     }
     
     func blended(with color: PlatformColor, amount: CGFloat) -> PlatformColor {

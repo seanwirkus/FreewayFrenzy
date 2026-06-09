@@ -128,7 +128,7 @@ struct GarageView: View {
             tabBar
                 .padding(.horizontal, layout.edgePadding)
 
-            showcasePanel(layout)
+            phoneShowcase(layout)
                 .padding(.horizontal, layout.edgePadding)
 
             ScrollView(.vertical, showsIndicators: false) {
@@ -498,6 +498,50 @@ struct GarageView: View {
 
     private var selectedRoute: RouteDefinition {
         RouteDefinition.catalog[state.selectedRouteIndex.clamped(to: 0...(RouteDefinition.catalog.count - 1))]
+    }
+
+    /// Compact, content-sized car preview for phones. Sizes to its own content
+    /// (no forced height) so the car/identity never overflow onto the scroll
+    /// content below. Full stat bars live in the per-vehicle rows + wide layout.
+    private func phoneShowcase(_ layout: Layout) -> some View {
+        let carHeight: CGFloat = layout.cramped ? 64 : 78
+        return HStack(spacing: 12) {
+            ZStack {
+                Ellipse()
+                    .fill(state.paintColor.opacity(0.16))
+                    .frame(width: 132, height: carHeight * 0.7)
+                    .offset(y: carHeight * 0.28)
+                IsoCarView(type: selectedVehicle.type, color: state.paintColor, scale: layout.cramped ? 0.6 : 0.7)
+            }
+            .frame(width: 140, height: carHeight)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(selectedVehicle.name)
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .foregroundStyle(FreewayFrenzyUI.garageText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("\(selectedVehicle.subtitle) Class")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(FreewayFrenzyUI.garageLabel)
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: FreewayFrenzyUI.garageBlockRadius, style: .continuous)
+                        .fill(state.paintColor)
+                        .frame(width: 18, height: 18)
+                        .overlay(RoundedRectangle(cornerRadius: FreewayFrenzyUI.garageBlockRadius).stroke(.white.opacity(0.5), lineWidth: 2))
+                    Text(GarageCatalog.hexString(state.paintHex).uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(FreewayFrenzyUI.garageLabel)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .garagePanel()
     }
 
     private func showcasePanel(_ layout: Layout) -> some View {

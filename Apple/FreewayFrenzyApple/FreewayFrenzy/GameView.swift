@@ -1253,11 +1253,13 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         for index in obstacleNodes.indices {
             guard index < model.obstacles.count, model.obstacles[index].active else {
                 obstacleNodes[index].isHidden = true
+                obstacleNodes[index].opacity = 0
                 continue
             }
             let obstacle = model.obstacles[index]
             let node = obstacleNodes[index]
             node.isHidden = false
+            node.opacity = spawnOpacity(for: obstacle.y)
             node.position = SCNVector3(laneX(model.clampedLane(obstacle.lane)), 0.42, zForLogicY(obstacle.y))
             applyCarColors(node, body: .hex(model.obstacleColorHex(for: obstacle.type)), roof: .charcoal, isPlayer: false)
         }
@@ -1267,11 +1269,13 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         for index in coinNodes.indices {
             guard index < model.coins.count, model.coins[index].active else {
                 coinNodes[index].isHidden = true
+                coinNodes[index].opacity = 0
                 continue
             }
             let coin = model.coins[index]
             let node = coinNodes[index]
             node.isHidden = false
+            node.opacity = spawnOpacity(for: coin.y)
             node.position = SCNVector3(laneX(model.clampedLane(coin.lane)), 0.5 + sin(coin.rot) * 0.1, zForLogicY(coin.y))
             node.eulerAngles.y = SCNFloat(coin.rot)
         }
@@ -1356,6 +1360,12 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     /// where the cars visually overlap instead of after the obstacle slides past.
     private func zForLogicY(_ y: CGFloat) -> CGFloat {
         Self.playerZ - (model.carY - y) * Self.zPerLogic
+    }
+
+    private func spawnOpacity(for y: CGFloat) -> CGFloat {
+        let fadeDistance: CGFloat = 96
+        let progress = (y - model.spawnY) / fadeDistance
+        return min(max(progress, 0), 1)
     }
 
     private func wrapZ(_ z: CGFloat, spacing: CGFloat, near: CGFloat = 8) -> CGFloat {

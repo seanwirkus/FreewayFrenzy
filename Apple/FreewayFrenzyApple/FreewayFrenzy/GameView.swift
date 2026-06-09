@@ -26,6 +26,9 @@ fileprivate struct HUDSnapshot: Sendable, Equatable {
     let carColorR: Double
     let carColorG: Double
     let carColorB: Double
+    let carRoofR: Double
+    let carRoofG: Double
+    let carRoofB: Double
     let selectedCarIndex: Int
 }
 
@@ -40,6 +43,7 @@ final class GameHUDState: ObservableObject {
     @Published var throttle: CGFloat = 0
     @Published var carName = ""
     @Published var carColor = Color.white
+    @Published var carRoofColor = Color.black
     @Published var selectedCarIndex = 0
 
     /// Lets the SwiftUI overlay drive the game (Start / Retry / car carousel)
@@ -59,6 +63,11 @@ final class GameHUDState: ObservableObject {
             red: snapshot.carColorR,
             green: snapshot.carColorG,
             blue: snapshot.carColorB
+        )
+        carRoofColor = Color(
+            red: snapshot.carRoofR,
+            green: snapshot.carRoofG,
+            blue: snapshot.carRoofB
         )
         selectedCarIndex = snapshot.selectedCarIndex
     }
@@ -495,6 +504,12 @@ struct GameHUDOverlay: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(brandGold, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    Text("CAR \(min(max(state.selectedCarIndex + 1, 1), paintStyles.count))/\(paintStyles.count)")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                 }
 
                 paintGrid(columns: layout.swatchColumns)
@@ -595,28 +610,63 @@ struct GameHUDOverlay: View {
     /// A tiny blocky car built from SwiftUI shapes, tinted with the chosen colour.
     private func carPreview(scale: CGFloat) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Ellipse()
+                .fill(.black.opacity(0.28))
+                .frame(width: 128, height: 20)
+                .offset(y: 42)
+
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(state.carColor)
-                .frame(width: 122, height: 68)
+                .frame(width: 126, height: 58)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(.black.opacity(0.23))
+                        .frame(height: 16)
+                }
                 .shadow(color: state.carColor.opacity(0.65), radius: 12)
+
             Rectangle()
-                .fill(.black.opacity(0.24))
-                .frame(width: 130, height: 12)
-                .offset(y: 5)
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(.black.opacity(0.22))
-                .frame(width: 70, height: 30)
-                .offset(y: -12)
+                .fill(state.carRoofColor)
+                .frame(width: 84, height: 34)
+                .offset(y: -21)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(.white.opacity(0.16))
+                        .frame(height: 7)
+                }
+
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(Color(red: 0.55, green: 0.78, blue: 0.92).opacity(0.78))
+                    .frame(width: 28, height: 16)
+                Rectangle()
+                    .fill(Color(red: 0.18, green: 0.33, blue: 0.46).opacity(0.9))
+                    .frame(width: 22, height: 16)
+            }
+            .offset(y: -21)
+
+            Rectangle()
+                .fill(.black.opacity(0.38))
+                .frame(width: 132, height: 8)
+                .offset(y: 9)
+
             HStack(spacing: 48) {
                 Rectangle().fill(.yellow).frame(width: 10, height: 8)
                 Rectangle().fill(.yellow).frame(width: 10, height: 8)
             }
-            .offset(y: 27)
+            .offset(y: 21)
+
             HStack(spacing: 66) {
-                Circle().fill(.black).frame(width: 18, height: 18)
-                Circle().fill(.black).frame(width: 18, height: 18)
+                Circle()
+                    .fill(.black)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8))
+                Circle()
+                    .fill(.black)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8))
             }
-            .offset(y: 33)
+            .offset(y: 32)
         }
         .frame(width: 138, height: 86)
         .scaleEffect(scale)
@@ -626,6 +676,7 @@ struct GameHUDOverlay: View {
                 .stroke(.white.opacity(0.16), lineWidth: 2)
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: state.carColor)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: state.carRoofColor)
     }
 
     // MARK: Game Over
@@ -1282,6 +1333,9 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
             carColorR: Double((style.bodyHex >> 16) & 0xFF) / 255.0,
             carColorG: Double((style.bodyHex >> 8) & 0xFF) / 255.0,
             carColorB: Double(style.bodyHex & 0xFF) / 255.0,
+            carRoofR: Double((style.roofHex >> 16) & 0xFF) / 255.0,
+            carRoofG: Double((style.roofHex >> 8) & 0xFF) / 255.0,
+            carRoofB: Double(style.roofHex & 0xFF) / 255.0,
             selectedCarIndex: model.selectedCarIndex
         )
         guard snapshot != lastHUDSnapshot else { return }

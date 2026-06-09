@@ -466,6 +466,7 @@ struct GameHUDOverlay: View {
             .foregroundStyle(fg)
             .padding(.horizontal, 30)
             .padding(.vertical, 14)
+            .frame(minWidth: 124)
             .background(fill, in: Capsule())
             .shadow(color: fill.opacity(0.5), radius: 14, y: 4)
         }
@@ -695,18 +696,18 @@ struct GameHUDOverlay: View {
             }
 
             VStack(spacing: 10) {
-                resultRow(label: "Score", value: "\(state.score)", tint: .white)
-                resultRow(label: "Best", value: "\(state.highScore)", tint: brandGold)
-                resultRow(label: "Distance", value: "\(state.distance) m", tint: .white.opacity(0.8))
+                resultRow(label: "Score", value: "\(state.score)", tint: .white, layout: layout)
+                resultRow(label: "Best", value: "\(state.highScore)", tint: brandGold, layout: layout)
+                resultRow(label: "Distance", value: "\(state.distance) m", tint: .white.opacity(0.8), layout: layout)
             }
             .padding(.vertical, 2)
 
-            HStack(spacing: 12) {
-                pillButton("RETRY", icon: "arrow.clockwise", fill: brandMint) {
-                    state.inputHandler?.tap()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    gameOverButtons
                 }
-                pillButton("MENU", icon: "house.fill", fill: .white.opacity(0.16), fg: .white) {
-                    state.inputHandler?.pressMenu()
+                VStack(spacing: 10) {
+                    gameOverButtons
                 }
             }
             .padding(.top, 4)
@@ -718,7 +719,17 @@ struct GameHUDOverlay: View {
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 
-    private func resultRow(label: String, value: String, tint: Color) -> some View {
+    @ViewBuilder
+    private var gameOverButtons: some View {
+        pillButton("RETRY", icon: "arrow.clockwise", fill: brandMint) {
+            state.inputHandler?.tap()
+        }
+        pillButton("MENU", icon: "house.fill", fill: .white.opacity(0.16), fg: .white) {
+            state.inputHandler?.pressMenu()
+        }
+    }
+
+    private func resultRow(label: String, value: String, tint: Color, layout: LayoutMetrics) -> some View {
         HStack {
             Text(label)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
@@ -729,7 +740,7 @@ struct GameHUDOverlay: View {
                 .foregroundStyle(tint)
                 .contentTransition(.numericText())
         }
-        .frame(width: 230)
+        .frame(maxWidth: min(layout.cardMaxWidth - layout.cardInnerPadding * 2, 280))
     }
 }
 

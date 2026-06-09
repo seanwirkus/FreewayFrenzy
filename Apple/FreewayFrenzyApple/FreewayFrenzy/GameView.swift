@@ -494,24 +494,7 @@ struct GameHUDOverlay: View {
                     carArrow("chevron.right", direction: 1)
                 }
 
-                HStack(spacing: 8) {
-                    Text(state.carName.uppercased())
-                        .font(.system(size: 18, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                    Text("PAINT")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.black.opacity(0.75))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(brandGold, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-                    Text("CAR \(min(max(state.selectedCarIndex + 1, 1), paintStyles.count))/\(paintStyles.count)")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-                }
+                garageMetaRow(layout)
 
                 paintGrid(columns: layout.swatchColumns)
             }
@@ -560,6 +543,49 @@ struct GameHUDOverlay: View {
         }
         .padding(8)
         .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func garageMetaRow(_ layout: LayoutMetrics) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                garageCarName
+                garageChip("PAINT", foreground: .black.opacity(0.75), background: brandGold)
+                garageChip("CAR \(selectedCarOrdinal)/\(paintStyles.count)", foreground: .white.opacity(0.68), background: .white.opacity(0.08))
+            }
+
+            VStack(spacing: 6) {
+                garageCarName
+                HStack(spacing: 8) {
+                    garageChip("PAINT", foreground: .black.opacity(0.75), background: brandGold)
+                    garageChip("CAR \(selectedCarOrdinal)/\(paintStyles.count)", foreground: .white.opacity(0.68), background: .white.opacity(0.08))
+                }
+            }
+            .frame(maxWidth: layout.cardMaxWidth - layout.cardInnerPadding * 2)
+        }
+    }
+
+    private var selectedCarOrdinal: Int {
+        min(max(state.selectedCarIndex + 1, 1), paintStyles.count)
+    }
+
+    private var garageCarName: some View {
+        Text(state.carName.uppercased())
+            .font(.system(size: 18, weight: .black, design: .rounded))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .contentTransition(.numericText())
+    }
+
+    private func garageChip(_ title: String, foreground: Color, background: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .heavy, design: .rounded))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(background, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 
     private func paintTile(style: CarStyle, isSelected: Bool) -> some View {

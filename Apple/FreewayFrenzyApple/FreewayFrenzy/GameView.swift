@@ -145,6 +145,94 @@ private let brandGold = FreewayFrenzyUI.gold
 struct GameHUDOverlay: View {
     @ObservedObject var state: GameHUDState
 
+    private struct LayoutMetrics {
+        let size: CGSize
+        let compact: Bool
+        let cramped: Bool
+        let wide: Bool
+
+        var horizontalPadding: CGFloat {
+            #if os(macOS)
+            return 44
+            #else
+            return compact ? 14 : 20
+            #endif
+        }
+
+        var topPadding: CGFloat {
+            #if os(macOS)
+            return 24
+            #else
+            return cramped ? 4 : 8
+            #endif
+        }
+
+        var bottomPadding: CGFloat {
+            #if os(macOS)
+            return 28
+            #else
+            return compact ? 10 : 16
+            #endif
+        }
+
+        var cardOuterPadding: CGFloat {
+            #if os(macOS)
+            return 56
+            #else
+            return compact ? 10 : 16
+            #endif
+        }
+
+        var cardInnerPadding: CGFloat {
+            #if os(macOS)
+            return 34
+            #else
+            return compact ? 16 : 22
+            #endif
+        }
+
+        var titleFontSize: CGFloat {
+            #if os(macOS)
+            return 44
+            #else
+            return cramped ? 28 : (compact ? 32 : 38)
+            #endif
+        }
+
+        var cardMaxWidth: CGFloat {
+            #if os(macOS)
+            return 600
+            #else
+            return min(max(size.width - cardOuterPadding * 2, 320), wide ? 560 : 430)
+            #endif
+        }
+
+        var previewScale: CGFloat {
+            #if os(macOS)
+            return 1.08
+            #else
+            return cramped ? 0.82 : (wide ? 1.12 : 1.0)
+            #endif
+        }
+
+        var swatchColumns: Int {
+            wide ? 6 : 4
+        }
+
+        var menuSpacing: CGFloat {
+            cramped ? 10 : 15
+        }
+    }
+
+    private func metrics(for size: CGSize) -> LayoutMetrics {
+        LayoutMetrics(
+            size: size,
+            compact: size.width < 430 || size.height < 760,
+            cramped: size.height < 670,
+            wide: size.width >= 560
+        )
+    }
+
     private var hudHorizontalPadding: CGFloat {
         #if os(macOS)
         44
@@ -219,17 +307,20 @@ struct GameHUDOverlay: View {
     }
 
     var body: some View {
-        ZStack {
-            switch state.phase {
-            case .playing, .crash:
-                playingHUD
-            case .menu:
-                menuCard
-            case .gameOver:
-                gameOverCard
+        GeometryReader { geo in
+            let layout = metrics(for: geo.size)
+            ZStack {
+                switch state.phase {
+                case .playing, .crash:
+                    playingHUD(layout)
+                case .menu:
+                    menuCard(layout)
+                case .gameOver:
+                    gameOverCard(layout)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var controlHint: String {
@@ -242,7 +333,7 @@ struct GameHUDOverlay: View {
 
     // MARK: Playing
 
-    private var playingHUD: some View {
+    private func playingHUD(_ layout: LayoutMetrics) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -267,15 +358,15 @@ struct GameHUDOverlay: View {
                         .animation(.spring(response: 0.28, dampingFraction: 0.7), value: state.coins)
                 }
             }
-            .padding(.horizontal, hudHorizontalPadding)
-            .padding(.top, hudTopPadding)
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.top, layout.topPadding)
 
             Spacer()
 
             #if os(macOS)
             macControlBar
-                .padding(.horizontal, hudHorizontalPadding)
-                .padding(.bottom, hudBottomPadding)
+                .padding(.horizontal, layout.horizontalPadding)
+                .padding(.bottom, layout.bottomPadding)
                 .opacity(state.phase == .playing ? 1 : 0)
             #else
             Text(controlHint)
@@ -284,7 +375,7 @@ struct GameHUDOverlay: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .safeAreaPadding(.bottom, hudBottomPadding)
+                .safeAreaPadding(.bottom, layout.bottomPadding)
                 .opacity(state.phase == .playing ? 1 : 0)
             #endif
         }
@@ -352,14 +443,14 @@ struct GameHUDOverlay: View {
 
     // MARK: Shared chrome
 
-    private var titleStack: some View {
+    private func titleStack(_ layout: LayoutMetrics) -> some View {
         VStack(spacing: -8) {
             Text("FREEWAY")
                 .foregroundStyle(brandRed)
             Text("FRENZY")
                 .foregroundStyle(.white)
         }
-        .font(.system(size: titleFontSize, weight: .black, design: .rounded))
+        .font(.system(size: layout.titleFontSize, weight: .black, design: .rounded))
         .tracking(1)
         // Hard offset drop-shadow for a chunky, sticker-like title.
         .shadow(color: .black.opacity(0.3), radius: 0, x: 3, y: 4)
@@ -387,11 +478,11 @@ struct GameHUDOverlay: View {
 
     // MARK: Menu
 
-    private var menuCard: some View {
-        VStack(spacing: 16) {
-            titleStack
+    private func menuCard(_ layout: LayoutMetrics) -> some View {
+        let content = VStack(spacing: layout.menuSpacing) {
+            titleStack(layout)
 
-            VStack(spacing: 12) {
+            VStack(spacing: layout.cramped ? 8 : 12) {
                 Text("BLOCK GARAGE")
                     .font(.system(size: 12, weight: .heavy, design: .rounded))
                     .tracking(2)
@@ -400,9 +491,9 @@ struct GameHUDOverlay: View {
                     .padding(.vertical, 5)
                     .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
 
-                HStack(spacing: 20) {
+                HStack(spacing: layout.cramped ? 12 : 20) {
                     carArrow("chevron.left", direction: -1)
-                    carPreview
+                    carPreview(scale: layout.previewScale)
                     carArrow("chevron.right", direction: 1)
                 }
 
@@ -419,17 +510,19 @@ struct GameHUDOverlay: View {
                         .background(brandGold, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                 }
 
-                paintGrid
+                paintGrid(columns: layout.swatchColumns)
             }
 
             pillButton("PLAY", icon: "play.fill", fill: brandMint) {
                 state.inputHandler?.tap()
             }
 
-            Text(controlHint)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
-                .multilineTextAlignment(.center)
+            if !layout.cramped {
+                Text(controlHint)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .multilineTextAlignment(.center)
+            }
 
             if state.highScore > 0 {
                 Label("Best \(state.highScore)", systemImage: "trophy.fill")
@@ -437,16 +530,22 @@ struct GameHUDOverlay: View {
                     .foregroundStyle(brandGold)
             }
         }
-        .padding(cardInnerPadding)
-        .frame(maxWidth: cardMaxWidth)
-        .background { cardBackground() }
-        .padding(cardOuterPadding)
+
+        return ScrollView(.vertical, showsIndicators: false) {
+            content
+                .padding(layout.cardInnerPadding)
+                .frame(maxWidth: layout.cardMaxWidth)
+                .background { cardBackground() }
+                .padding(layout.cardOuterPadding)
+        }
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .safeAreaPadding(.top, layout.topPadding)
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 
-    private var paintGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6), spacing: 8) {
+    private func paintGrid(columns: Int) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: columns), spacing: 8) {
             ForEach(Array(paintSwatches.enumerated()), id: \.offset) { index, color in
                 Button {
                     state.inputHandler?.selectCar(index)
@@ -473,7 +572,7 @@ struct GameHUDOverlay: View {
     }
 
     /// A tiny blocky car built from SwiftUI shapes, tinted with the chosen colour.
-    private var carPreview: some View {
+    private func carPreview(scale: CGFloat) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(state.carColor)
@@ -499,6 +598,8 @@ struct GameHUDOverlay: View {
             .offset(y: 33)
         }
         .frame(width: 138, height: 86)
+        .scaleEffect(scale)
+        .frame(width: 138 * scale, height: 86 * scale)
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(.white.opacity(0.16), lineWidth: 2)
@@ -508,10 +609,10 @@ struct GameHUDOverlay: View {
 
     // MARK: Game Over
 
-    private var gameOverCard: some View {
+    private func gameOverCard(_ layout: LayoutMetrics) -> some View {
         VStack(spacing: 13) {
             Text("GAME OVER")
-                .font(.system(size: titleFontSize, weight: .black, design: .rounded))
+                .font(.system(size: layout.titleFontSize, weight: .black, design: .rounded))
                 .foregroundStyle(brandRed)
                 .shadow(color: .black.opacity(0.3), radius: 0, x: 3, y: 4)
 
@@ -538,10 +639,10 @@ struct GameHUDOverlay: View {
             }
             .padding(.top, 4)
         }
-        .padding(cardInnerPadding)
-        .frame(maxWidth: cardMaxWidth)
+        .padding(layout.cardInnerPadding)
+        .frame(maxWidth: layout.cardMaxWidth)
         .background { cardBackground() }
-        .padding(cardOuterPadding)
+        .padding(layout.cardOuterPadding)
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 
@@ -632,8 +733,12 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
     static let playerZ: CGFloat = 3.8
     /// World Z travelled per unit of logic-space Y. Fresh traffic starts behind
     /// the fog line, then moves in smoothly instead of popping mid-screen.
-    static let zPerLogic: CGFloat = 0.11
+    static let zPerLogic: CGFloat = 0.13
+    #if os(macOS)
     static let playerScale: CGFloat = 1.18
+    #else
+    static let playerScale: CGFloat = 1.34
+    #endif
 
     let scene = SCNScene()
     private let hudState: GameHUDState
@@ -683,12 +788,12 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
 
     private var cameraProfile: CameraProfile {
         #if os(macOS)
-        return CameraProfile(height: 7.9, back: 12.8, pitch: -0.47, fov: 50, fogStart: 52, fogEnd: 108, speedLift: 0.45, speedBack: 0.9)
+        return CameraProfile(height: 8.6, back: 14.6, pitch: -0.39, fov: 52, fogStart: 64, fogEnd: 126, speedLift: 0.48, speedBack: 1.05)
         #else
         if cachedAspect > 0.9 {
-            return CameraProfile(height: 6.8, back: 10.6, pitch: -0.54, fov: 47, fogStart: 42, fogEnd: 82, speedLift: 0.32, speedBack: 0.5)
+            return CameraProfile(height: 6.4, back: 9.6, pitch: -0.57, fov: 45, fogStart: 38, fogEnd: 76, speedLift: 0.28, speedBack: 0.45)
         } else {
-            return CameraProfile(height: 6.0, back: 8.7, pitch: -0.62, fov: 43, fogStart: 34, fogEnd: 70, speedLift: 0.25, speedBack: 0.35)
+            return CameraProfile(height: 5.25, back: 7.15, pitch: -0.72, fov: 39, fogStart: 28, fogEnd: 58, speedLift: 0.18, speedBack: 0.18)
         }
         #endif
     }
@@ -1126,8 +1231,8 @@ final class LowPolyGameCoordinator: NSObject, SCNSceneRendererDelegate, GameInpu
         let shake = model.phase == .crash ? model.cameraShake / 40 : .zero
         let speedT = min(model.speed / 320, 1.4)
         let profile = cameraProfile
-        let menuLift: CGFloat = model.phase == .menu ? -0.55 : 0
-        let menuBack: CGFloat = model.phase == .menu ? -1.0 : 0
+        let menuLift: CGFloat = model.phase == .menu ? -0.42 : 0
+        let menuBack: CGFloat = model.phase == .menu ? -0.85 : 0
         let desired = SCNVector3(
             SCNFloat(shake.dx),
             SCNFloat(profile.height + speedT * profile.speedLift + menuLift),

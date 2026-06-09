@@ -55,6 +55,7 @@ final class GameModel {
     let maxObstacles = 12
     let maxCoins = 15
     let crashDuration: TimeInterval = 1.2
+    let spawnY: CGFloat = -96
 
     let carStyles = [
         CarStyle(name: "Crimson", bodyHex: 0xD90429, roofHex: 0xA3031F),
@@ -274,9 +275,14 @@ final class GameModel {
 
         lastSpawnDistance += speed * 2 * dt
         let spawnGap = max(140 - CGFloat(score) * 0.8, 70)
-        if lastSpawnDistance >= spawnGap {
-            lastSpawnDistance = lastSpawnDistance.truncatingRemainder(dividingBy: spawnGap)
+        var spawnsThisFrame = 0
+        while lastSpawnDistance >= spawnGap, spawnsThisFrame < 2 {
+            lastSpawnDistance -= spawnGap
             spawnOne()
+            spawnsThisFrame += 1
+        }
+        if lastSpawnDistance >= spawnGap {
+            lastSpawnDistance = spawnGap * 0.5
         }
 
         let obstacleSpeed = speed * 1.8 + 30
@@ -363,19 +369,21 @@ final class GameModel {
 
     private func spawnOne() {
         spawnSerial += 1
-        let spawnY = -obstacleSize.height - 18
         guard let lane = nextSpawnLane(spawnY: spawnY) else { return }
-        let isCoin = (fastRand() % 100) < 32
+        let activeObstacles = obstacles.filter(\.active).count
+        let activeCoins = coins.filter(\.active).count
+        let laneHasRecentObstacle = obstacles.contains { $0.active && $0.lane == lane && abs($0.y - spawnY) < 260 }
+        let isCoin = (fastRand() % 100) < (laneHasRecentObstacle ? 58 : 30)
 
         if isCoin {
-            if coins.filter(\.active).count < maxCoins {
+            if activeCoins < maxCoins {
                 for index in coins.indices where !coins[index].active {
                     coins[index] = Collectible(active: true, y: spawnY, lane: lane, rot: 0)
                     return
                 }
             }
         } else {
-            guard obstacles.filter(\.active).count < min(1 + score / 15, 8) else { return }
+            guard activeObstacles < min(2 + score / 18, 8) else { return }
             for index in obstacles.indices where !obstacles[index].active {
                 obstacles[index] = Obstacle(active: true, y: spawnY, lane: lane, type: Int(fastRand() % 6))
                 return
@@ -397,17 +405,17 @@ final class GameModel {
 
     private func laneClear(lane: Int, spawnY: CGFloat) -> Bool {
         for obstacle in obstacles where obstacle.active && obstacle.lane == lane {
-            if abs(obstacle.y - spawnY) < 170 {
+            if abs(obstacle.y - spawnY) < 230 {
                 return false
             }
         }
         for coin in coins where coin.active && coin.lane == lane {
-            if abs(coin.y - spawnY) < 90 {
+            if abs(coin.y - spawnY) < 110 {
                 return false
             }
         }
-        let activeAtSpawn = obstacles.filter { $0.active && abs($0.y - spawnY) < 90 }.count
-        if activeAtSpawn >= 2 { return false }
+        let activeAtSpawn = obstacles.filter { $0.active && abs($0.y - spawnY) < 150 }.count
+        if activeAtSpawn >= 1 { return false }
         return true
     }
 

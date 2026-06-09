@@ -50,8 +50,11 @@ final class SoundController: @unchecked Sendable {
     }
 
     func playCrash() {
-        trigger(kind: .noise, frequency: 80, endFrequency: 40, level: 0.35, duration: 0.45)
-        trigger(kind: .sine, frequency: 110, endFrequency: 45, level: 0.28, duration: 0.35)
+        // Soft "slime blob plop" — two detuned downward bloops + a round low tail,
+        // instead of a harsh noise burst. Gentle on the ears.
+        trigger(kind: .sweep, frequency: 340, endFrequency: 78, level: 0.18, duration: 0.20)
+        trigger(kind: .sweep, frequency: 250, endFrequency: 66, level: 0.12, duration: 0.26, delay: 0.04)
+        trigger(kind: .sine, frequency: 130, endFrequency: 58, level: 0.10, duration: 0.16, delay: 0.07)
     }
 
     func playLane() {

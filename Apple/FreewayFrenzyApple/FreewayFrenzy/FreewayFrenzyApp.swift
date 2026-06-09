@@ -4,13 +4,12 @@ import SwiftUI
 struct FreewayFrenzyApp: App {
     var body: some Scene {
         WindowGroup {
-            #if os(iOS)
-            FullScreenHost {
-                GameView()
-            }
-            #else
+            // GameView paints edge-to-edge via `.ignoresSafeArea(.all)`. The old
+            // iOS `FullScreenHost` (a UIHostingController nested in the WindowGroup)
+            // was left unconstrained and collapsed the whole UI to a 320×480 hosting
+            // default, letterboxing gameplay. Hosting GameView directly fills the
+            // window on every device.
             GameView()
-            #endif
         }
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)

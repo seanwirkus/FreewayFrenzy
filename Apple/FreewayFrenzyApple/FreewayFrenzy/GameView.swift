@@ -124,11 +124,14 @@ struct GameView: View {
             ZStack {
                 rootBackdrop
 
-                if state.phase != .menu {
-                    LowPolyGameView(state: state)
-                        .frame(width: viewport.width, height: viewport.height)
-                        .ignoresSafeArea(.all)
-                }
+                // Always mounted — even in the menu — so the SceneKit coordinator and
+                // game loop exist from launch. That's what wires `state.inputHandler`
+                // and keeps the render loop ticking, so RACE / Space actually start a
+                // run. It's hidden (alpha 0) behind the opaque garage during the menu.
+                LowPolyGameView(state: state)
+                    .frame(width: viewport.width, height: viewport.height)
+                    .ignoresSafeArea(.all)
+                    .allowsHitTesting(state.phase != .menu)
 
                 if state.phase == .gameOver {
                     vignette
@@ -635,13 +638,6 @@ struct LowPolyGameView: PlatformViewRepresentable {
         applyMenuVisibility(to: view, isMenu: state.phase == .menu)
     }
     #else
-    static func sizeThatFits(_ proposal: ProposedViewSize, uiView: GameSCNView, context: Context) -> CGSize? {
-        CGSize(
-            width: proposal.width ?? UIScreen.main.bounds.width,
-            height: proposal.height ?? UIScreen.main.bounds.height
-        )
-    }
-
     func makeUIView(context: Context) -> GameSCNView {
         makeView(context: context)
     }
@@ -678,15 +674,27 @@ struct LowPolyGameView: PlatformViewRepresentable {
     }
 
     private func applyMenuVisibility(to view: GameSCNView, isMenu: Bool) {
+        // The SCN view stays fully opaque and visible at all times — the opaque
+        // garage overlay covers it during the menu. Toggling alpha here was leaving
+        // the GPU view transparent during play. We only gate interaction so the
+        // garage's SwiftUI buttons receive touches while in the menu, and keep the
+        // render loop alive so a RACE/Start press is processed (the simulation only
+        // advances inside the SceneKit render callback).
         #if os(iOS)
         view.isHidden = false
-        view.alpha = isMenu ? 0 : 1
-        view.isOpaque = !isMenu
-        view.backgroundColor = isMenu ? .clear : PlatformColor.sky
-        view.layer.isOpaque = !isMenu
-        view.rendersContinuously = !isMenu
+        view.alpha = 1
+        view.isOpaque = true
+        view.backgroundColor = PlatformColor.sky
+        view.layer.isOpaque = true
+        view.isUserInteractionEnabled = !isMenu
+        if view.scene != nil { view.rendersContinuously = true }
         #else
-        view.isHidden = isMenu
+        view.isHidden = false
+        view.alphaValue = 1
+        if view.scene != nil { view.rendersContinuously = true }
+        if let window = view.window, window.firstResponder !== view {
+            window.makeFirstResponder(view)
+        }
         #endif
     }
 }
